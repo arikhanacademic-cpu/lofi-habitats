@@ -1,0 +1,1673 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="Pixel-art habitats showing which animals are awake or asleep right now, synced to real local time, seasons and weather.">
+<style>[hidden]{display:none!important}body{margin:0}</style></head><body>
+<title>Lofi Habitats</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@500;700&family=Atkinson+Hyperlegible:wght@400;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: a pixel diorama stage on the left, field-notes panel on the right; stacks on phones. */
+:root{
+  --bg:#e7ebf0; --surface:#f6f8fa; --ink:#18212e; --muted:#566275; --line:#cbd3de;
+  --accent:#c4485f; --accent-ink:#ffffff;
+  --awake:#23845a; --asleep:#5155b8; --away:#7d8494; --migrate:#b0641a;
+  --frame:#18212e;
+  --f-display:"Pixelify Sans", "Courier New", monospace;
+  --f-body:"Atkinson Hyperlegible", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --f-mono:"IBM Plex Mono", ui-monospace, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#10131e; --surface:#181c2b; --ink:#e7e8f2; --muted:#9aa2bb; --line:#2b3149;
+  --accent:#ff8f86; --accent-ink:#10131e;
+  --awake:#5fd39a; --asleep:#a3a6ff; --away:#858ba0; --migrate:#f0a65a;
+  --frame:#000000; color-scheme:dark;
+}}
+:root[data-theme="dark"]{
+  --bg:#10131e; --surface:#181c2b; --ink:#e7e8f2; --muted:#9aa2bb; --line:#2b3149;
+  --accent:#ff8f86; --accent-ink:#10131e;
+  --awake:#5fd39a; --asleep:#a3a6ff; --away:#858ba0; --migrate:#f0a65a;
+  --frame:#000000; color-scheme:dark;
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html,body{background:var(--bg);color:var(--ink)}
+body{font-family:var(--f-body);font-size:15px;line-height:1.5;padding-inline:16px;padding-block:20px 32px}
+.app{max-width:1180px;margin:0 auto;display:flex;flex-direction:column;gap:16px}
+.top{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:12px 24px}
+h1{font-family:var(--f-display);font-weight:700;font-size:clamp(30px,5vw,44px);line-height:1;margin:0;letter-spacing:.01em}
+.brand p{margin:6px 0 0;color:var(--muted);text-wrap:balance}
+.search{position:relative;flex:1 1 280px;max-width:420px}
+.search input{width:100%;font:inherit;padding:10px 12px 10px 36px;border:2px solid var(--frame);background:var(--surface);color:var(--ink);border-radius:0;box-shadow:3px 3px 0 var(--frame)}
+.search input:focus{outline:2px solid var(--accent);outline-offset:2px}
+.search svg{position:absolute;left:11px;top:50%;transform:translateY(-50%);width:16px;height:16px;fill:none;stroke:var(--muted);stroke-width:2}
+#results{position:absolute;z-index:20;left:0;right:0;top:calc(100% + 6px);margin:0;padding:4px;list-style:none;background:var(--surface);border:2px solid var(--frame);box-shadow:3px 3px 0 var(--frame);max-height:320px;overflow:auto}
+#results li{display:flex;align-items:center;gap:10px;padding:6px 8px;cursor:pointer}
+#results li[aria-selected="true"],#results li:hover{background:var(--bg)}
+#results li img{width:28px;height:28px;image-rendering:pixelated;object-fit:contain}
+#results li small{color:var(--muted);margin-left:auto;font-size:12px;text-align:right}
+#results li.empty{cursor:default;color:var(--muted)}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+.tabs{display:flex;flex-wrap:wrap;gap:8px}
+.tabs button{font-family:var(--f-display);font-weight:500;font-size:15px;padding:6px 12px;border:2px solid var(--frame);background:var(--surface);color:var(--ink);cursor:pointer;border-radius:0}
+.tabs button[aria-pressed="true"]{background:var(--ink);color:var(--bg)}
+.tabs button:focus-visible,button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.tabs .clock{font-family:var(--f-mono);font-size:12px;opacity:.75;margin-left:6px}
+.grid{display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:20px;align-items:start}
+@media (max-width:900px){.grid{grid-template-columns:minmax(0,1fr)}}
+.stage{position:relative;border:3px solid var(--frame);box-shadow:6px 6px 0 var(--frame);background:#0b1026;aspect-ratio:16/9;max-width:100%;overflow:hidden}
+#cv{display:block;width:100%;height:100%;image-rendering:pixelated;image-rendering:crisp-edges;cursor:default}
+.hud{position:absolute;left:10px;top:10px;display:flex;flex-direction:column;gap:2px;padding:8px 10px;background:rgba(10,12,24,.62);color:#f2f2f7;pointer-events:none;max-width:70%}
+.hud .place{font-size:12px;letter-spacing:.06em;text-transform:uppercase;opacity:.85}
+.hud .time{font-family:var(--f-display);font-size:clamp(22px,4vw,34px);line-height:1;font-variant-numeric:tabular-nums}
+.hud .phase{font-family:var(--f-mono);font-size:12px;opacity:.9}
+#snd{position:absolute;right:10px;top:10px;font-family:var(--f-display);font-size:14px;padding:6px 10px;border:2px solid #f2f2f7;background:rgba(10,12,24,.62);color:#f2f2f7;cursor:pointer;display:flex;gap:8px;align-items:center;border-radius:0}
+#snd .bars{display:inline-flex;gap:2px;align-items:flex-end;height:12px}
+#snd .bars i{width:3px;background:#f2f2f7;height:4px}
+#snd.on .bars i{animation:eq 0.9s steps(3) infinite}
+#snd.on .bars i:nth-child(2){animation-delay:.3s}#snd.on .bars i:nth-child(3){animation-delay:.6s}
+@keyframes eq{0%{height:3px}50%{height:12px}100%{height:6px}}
+.tag{position:absolute;transform:translate(-50%,-100%);font-family:var(--f-display);font-size:13px;background:#ffd166;color:#18212e;padding:1px 6px;white-space:nowrap;pointer-events:none;border:2px solid #18212e}
+.depth{position:absolute;left:0;top:0;bottom:0;width:100%;pointer-events:none}
+.depth span{position:absolute;right:8px;transform:translateY(-50%);font-family:var(--f-mono);font-size:11px;color:#9fb6d6;opacity:.8}
+.timebar{display:flex;flex-wrap:wrap;align-items:center;gap:10px 14px;margin-top:18px}
+.timebar label{font-family:var(--f-display);font-size:15px}
+.timebar input[type=range]{flex:1 1 220px;accent-color:var(--accent);min-width:0}
+.timebar output{font-family:var(--f-mono);font-size:13px;min-width:92px;font-variant-numeric:tabular-nums;color:var(--muted)}
+.btn{font-family:var(--f-display);font-size:14px;padding:5px 10px;border:2px solid var(--frame);background:var(--surface);color:var(--ink);cursor:pointer;border-radius:0}
+.btn[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.panel{display:flex;flex-direction:column;gap:16px;min-width:0}
+.card{background:var(--surface);border:2px solid var(--frame);padding:14px 16px;display:flex;flex-direction:column;gap:8px}
+.card .head{display:flex;gap:12px;align-items:center}
+.card .head img{width:56px;height:56px;image-rendering:pixelated;object-fit:contain;background:var(--bg);padding:4px}
+.card h2{font-family:var(--f-display);font-size:22px;margin:0;line-height:1.1;text-wrap:balance}
+.card .sci{font-style:italic;color:var(--muted);font-size:13px}
+.card p{margin:0}
+.card .fact{color:var(--muted);font-size:14px}
+.card .close{margin-left:auto;align-self:flex-start;background:none;border:none;color:var(--muted);cursor:pointer;font-size:20px;line-height:1;padding:2px 6px}
+.pill{display:inline-flex;align-items:center;gap:6px;font-family:var(--f-mono);font-size:12px;font-weight:500;padding:2px 8px;border:1.5px solid currentColor;width:max-content}
+.pill::before{content:"";width:7px;height:7px;background:currentColor}
+.pill.awake{color:var(--awake)}.pill.asleep{color:var(--asleep)}.pill.away{color:var(--away)}.pill.migrate{color:var(--migrate)}
+.meta{font-family:var(--f-mono);font-size:12px;color:var(--muted)}
+.group h3{font-family:var(--f-display);font-weight:500;font-size:16px;margin:0 0 8px;display:flex;gap:8px;align-items:center}
+.group h3 .n{font-family:var(--f-mono);font-size:12px;color:var(--muted)}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{display:inline-flex;align-items:center;gap:6px;padding:3px 8px 3px 4px;border:1.5px solid var(--line);background:var(--surface);color:var(--ink);font:inherit;font-size:13px;cursor:pointer;border-radius:0}
+.chip:hover{border-color:var(--ink)}
+.chip[aria-current="true"]{border-color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent)}
+.chip img{width:22px;height:22px;image-rendering:pixelated;object-fit:contain}
+.chip.asleep img{opacity:.55}
+.chip small{color:var(--muted);font-size:11px}
+.empty-note{color:var(--muted);font-size:13px;margin:0}
+footer{color:var(--muted);font-size:13px;max-width:72ch}
+@media (max-width:520px){.hud{max-width:62%;padding:4px 6px;left:6px;top:6px}.hud .time{font-size:18px}.hud .phase{font-size:10px}.hud .place{display:none}.hud .place{font-size:10px}#snd{font-size:12px;padding:4px 7px}}
+@media (prefers-reduced-motion: reduce){#snd.on .bars i{animation:none;height:8px}}
+
+.controls{display:flex;flex-direction:column;gap:10px;margin-top:18px}
+.row{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px}
+.controls label{font-family:var(--f-display);font-size:15px;min-width:52px}
+.controls input[type=range]{flex:1 1 200px;accent-color:var(--accent);min-width:0}
+.controls output{font-family:var(--f-mono);font-size:13px;min-width:92px;font-variant-numeric:tabular-nums;color:var(--muted)}
+.controls select{font:inherit;font-size:14px;padding:4px 8px;border:2px solid var(--frame);background:var(--surface);color:var(--ink);border-radius:0}
+.sp{flex:1}
+.ticker{position:absolute;left:10px;bottom:10px;font-family:var(--f-mono);font-size:12px;background:rgba(10,12,24,.66);color:#ffe6a8;padding:4px 8px;max-width:calc(100% - 20px)}
+.ticker::before{content:"● ";color:#ffb35c}
+#world{grid-column:1/-1}
+.world-head{font-family:var(--f-display);font-size:20px;margin:0 0 12px;text-wrap:balance}
+.wgrid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+@media (max-width:900px){.wgrid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (max-width:480px){.wgrid{grid-template-columns:minmax(0,1fr)}}
+.tile{position:relative;padding:0;border:3px solid var(--frame);background:#0b1026;cursor:pointer;display:block;text-align:left;box-shadow:4px 4px 0 var(--frame);border-radius:0}
+.tile canvas{display:block;width:100%;aspect-ratio:16/9;image-rendering:pixelated}
+.tile .tl{position:absolute;left:6px;top:6px;right:6px;display:flex;justify-content:space-between;gap:6px;color:#f2f2f7;font-family:var(--f-mono);font-size:11px;pointer-events:none}
+.tile .tl b{font-family:var(--f-display);font-size:14px;font-weight:500;background:rgba(10,12,24,.6);padding:1px 5px}
+.tile .tl span{background:rgba(10,12,24,.6);padding:1px 5px;white-space:nowrap}
+.tile .tc{position:absolute;left:6px;bottom:6px;color:#f2f2f7;font-family:var(--f-mono);font-size:11px;background:rgba(10,12,24,.6);padding:1px 5px}
+.tile:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+#study{position:fixed;inset:0;z-index:60;background:#05060c;display:flex;align-items:center;justify-content:center}
+#study[hidden]{display:none!important}
+#scv{width:100%;height:100%;object-fit:contain;image-rendering:pixelated}
+#study .s-top{position:absolute;left:16px;top:calc(14px + env(safe-area-inset-top,0px));display:flex;gap:12px;color:#f2f2f7;font-family:var(--f-mono);font-size:13px;background:rgba(10,12,24,.5);padding:4px 8px}
+#study .s-bar{position:absolute;left:50%;transform:translateX(-50%);bottom:calc(18px + env(safe-area-inset-bottom,0px));display:flex;flex-wrap:wrap;justify-content:center;align-items:center;gap:8px;background:rgba(10,12,24,.72);color:#f2f2f7;padding:8px 12px;max-width:calc(100% - 32px);transition:opacity .4s}
+#study.idle .s-bar,#study.idle .s-top{opacity:0}
+#sMode{font-family:var(--f-mono);font-size:12px;text-transform:uppercase;letter-spacing:.08em;color:#ffe6a8}
+#sClock{font-family:var(--f-display);font-size:30px;line-height:1;font-variant-numeric:tabular-nums;min-width:90px;text-align:center}
+#study button{font-family:var(--f-display);font-size:14px;padding:4px 10px;border:2px solid #f2f2f7;background:transparent;color:#f2f2f7;cursor:pointer;border-radius:0}
+.modal{position:fixed;inset:0;z-index:70;background:rgba(5,6,12,.7);display:flex;align-items:center;justify-content:center;padding:16px}
+.modal[hidden]{display:none!important}
+.modal-card{background:var(--surface);border:3px solid var(--frame);box-shadow:6px 6px 0 var(--frame);padding:14px;display:flex;flex-direction:column;gap:10px;max-width:min(900px,100%)}
+.modal-card img{width:100%;height:auto;image-rendering:pixelated;display:block}
+</style>
+
+<div class="app">
+  <header class="top">
+    <div class="brand">
+      <h1>Lofi Habitats</h1>
+      <p>Who's awake right now, in eight corners of the world. Live local time, real sun position and seasons.</p>
+    </div>
+    <div class="search">
+      <label for="q" class="sr">Search an animal or place</label>
+      <svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="7" cy="7" r="5"/><path d="M11 11l4 4"/></svg>
+      <input id="q" type="search" placeholder="Search an animal or place, e.g. sloth, Arctic" autocomplete="off" role="combobox" aria-expanded="false" aria-controls="results" aria-autocomplete="list">
+      <ul id="results" role="listbox" hidden></ul>
+    </div>
+  </header>
+
+  <nav class="tabs" id="tabs" aria-label="Habitats"></nav>
+
+  <main class="grid">
+    <section id="world" hidden><p class="world-head" id="worldHead"></p><div class="wgrid" id="wgrid"></div></section>
+    <section id="habView">
+      <div class="stage" id="stage">
+        <canvas id="cv" width="320" height="180" aria-label="Pixel-art habitat scene"></canvas>
+        <div class="depth" id="depth" hidden></div>
+        <div class="hud" aria-live="polite">
+          <span class="place" id="hudPlace"></span>
+          <span class="time" id="hudTime"></span>
+          <span class="phase" id="hudPhase"></span>
+        </div>
+        <button id="snd" type="button" aria-pressed="false"><span class="bars" aria-hidden="true"><i></i><i></i><i></i></span><span id="sndLabel">Play lofi</span></button>
+        <div class="tag" id="tag" hidden></div>
+        <div class="ticker" id="ticker" hidden></div>
+      </div>
+      <div class="controls">
+        <div class="row"><label for="tOff">Time</label><input id="tOff" type="range" min="-720" max="720" step="15" value="0"><output id="tOut" for="tOff">Live</output><button class="btn" id="live" type="button">Now</button><button class="btn" id="lapse" type="button" aria-pressed="false">Day-lapse</button></div>
+        <div class="row"><label for="dOff">Date</label><input id="dOff" type="range" min="0" max="364" step="1" value="0"><output id="dOut" for="dOff">Today</output><button class="btn" id="today" type="button">Today</button><button class="btn" id="ylapse" type="button" aria-pressed="false">Year-lapse</button></div>
+        <div class="row"><label for="wx">Weather</label><select id="wx"><option value="auto">Live</option><option value="clear">Clear</option><option value="cloudy">Cloudy</option><option value="rain">Rain</option><option value="storm">Storm</option><option value="snow">Snow</option><option value="fog">Fog</option></select><span class="meta" id="wxNote"></span><span class="sp"></span><button class="btn" id="studyBtn" type="button">Study mode</button><button class="btn" id="cardBtn" type="button">Postcard</button></div>
+      </div>
+    </section>
+
+    <aside class="panel" id="panel">
+      <div class="card" id="card"></div>
+      <div class="group"><h3><span class="pill awake">Awake</span><span class="n" id="nAwake"></span></h3><div class="chips" id="lAwake"></div></div>
+      <div class="group"><h3><span class="pill asleep">Asleep</span><span class="n" id="nAsleep"></span></h3><div class="chips" id="lAsleep"></div></div>
+      <div class="group" id="gAway"><h3><span class="pill away">Away this season</span><span class="n" id="nAway"></span></h3><div class="chips" id="lAway"></div></div>
+    </aside>
+  </main>
+
+  <div id="study" hidden>
+    <canvas id="scv" width="320" height="180" aria-label="Study mode scene"></canvas>
+    <div class="s-top"><span id="sPlace"></span><span id="sTime"></span></div>
+    <div class="s-bar"><span id="sMode">Focus</span><span id="sClock">25:00</span><button type="button" id="sPause">Pause</button><button type="button" id="sSkip">Skip</button><button type="button" id="sPrev" aria-label="Previous habitat">‹</button><button type="button" id="sNext" aria-label="Next habitat">›</button><button type="button" id="sExit">Exit</button></div>
+  </div>
+  <div id="pc" class="modal" hidden role="dialog" aria-label="Postcard">
+    <div class="modal-card"><img id="pcImg" alt="Postcard of the current scene"><div class="row"><button class="btn" id="pcDl" type="button">Download PNG</button><button class="btn" id="pcClose" type="button">Close</button></div><p class="meta">If the download doesn’t start, right-click or long-press the image to save it.</p></div>
+  </div>
+
+  <footer>Sun position is calculated live from each place's coordinates, and live weather comes from Open-Meteo where available. Sleep, migration and hibernation follow each species' typical rhythm, so real individuals will vary. Tap an animal in the scene to read about it.</footer>
+</div>
+
+<script>
+(() => {"use strict";
+/* ================= Pixel engine ================= */
+const W = 320, H = 180;
+const BAYER = [0,8,2,10,12,4,14,6,3,11,1,9,15,7,13,5].map(v => (v + .5) / 16);
+const bay = (x, y) => BAYER[((y & 3) << 2) + (x & 3)];
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const TAU = Math.PI * 2;
+function hash(x, y, s) { let h = (x * 374761393 + y * 668265263 + (s || 0) * 2246822519) | 0; h = Math.imul(h ^ (h >>> 13), 1274126177); return ((h ^ (h >>> 16)) >>> 0) / 4294967296; }
+function rng(seed) { return function () { seed |= 0; seed = seed + 0x6D2B79F5 | 0; let t = Math.imul(seed ^ seed >>> 15, 1 | seed); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+function vnoise(x, y, s) { const xi = Math.floor(x), yi = Math.floor(y), xf = x - xi, yf = y - yi; const u = xf * xf * (3 - 2 * xf), v = yf * yf * (3 - 2 * yf);
+  const a = hash(xi, yi, s), b = hash(xi + 1, yi, s), c = hash(xi, yi + 1, s), d = hash(xi + 1, yi + 1, s); return a + (b - a) * u + (c - a) * v + (a - b - c + d) * u * v; }
+function fbm(x, y, s, o) { let v = 0, a = .5, f = 1; for (let i = 0; i < (o || 3); i++) { v += a * vnoise(x * f, y * f, s + i * 17); f *= 2; a *= .5; } return v; }
+
+/* colour */
+const hx2 = h => [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)];
+const toHex = (r, g, b) => '#' + [r, g, b].map(v => clamp(Math.round(v), 0, 255).toString(16).padStart(2, '0')).join('');
+function mixH(a, b, t) { const A = hx2(a), B = hx2(b); t = clamp(t, 0, 1); return toHex(A[0] + (B[0] - A[0]) * t, A[1] + (B[1] - A[1]) * t, A[2] + (B[2] - A[2]) * t); }
+function rgb2hsl(r, g, b) { r /= 255; g /= 255; b /= 255; const mx = Math.max(r, g, b), mn = Math.min(r, g, b); let h = 0, s = 0; const l = (mx + mn) / 2;
+  if (mx !== mn) { const d = mx - mn; s = l > .5 ? d / (2 - mx - mn) : d / (mx + mn); h = mx === r ? (g - b) / d + (g < b ? 6 : 0) : mx === g ? (b - r) / d + 2 : (r - g) / d + 4; h *= 60; } return [h, s, l]; }
+function hsl2hex(h, s, l) { h = ((h % 360) + 360) % 360; s = clamp(s, 0, 1); l = clamp(l, 0, 1); const c = (1 - Math.abs(2 * l - 1)) * s, x = c * (1 - Math.abs((h / 60) % 2 - 1)), m = l - c / 2; let r, g, b;
+  if (h < 60) [r, g, b] = [c, x, 0]; else if (h < 120) [r, g, b] = [x, c, 0]; else if (h < 180) [r, g, b] = [0, c, x]; else if (h < 240) [r, g, b] = [0, x, c]; else if (h < 300) [r, g, b] = [x, 0, c]; else [r, g, b] = [c, 0, x];
+  return toHex((r + m) * 255, (g + m) * 255, (b + m) * 255); }
+function hueToward(h, target, amt) { let d = ((target - h + 540) % 360) - 180; return h + clamp(d, -amt, amt); }
+const RAMPS = {};
+/* 5-step ramp: deep, shade, base, light, highlight. Shadows drift toward violet, lights toward warm yellow. */
+function ramp(hex) {
+  if (RAMPS[hex]) return RAMPS[hex];
+  const [h, s, l] = rgb2hsl(...hx2(hex));
+  const grey = s < .08;
+  const mk = (dl, tgt, amt, ds) => hsl2hex(grey ? hueToward(h || 230, tgt, amt) : hueToward(h, tgt, amt), grey ? Math.min(.25, s + Math.abs(ds) + .04) : s + ds, l + dl);
+  return RAMPS[hex] = [mk(-.27 * (l > .85 ? 1.1 : 1), 255, 22, .06), mk(-.13, 250, 11, .04), hex, mk(.1, 52, 8, -.03), mk(.2, 55, 14, -.08)];
+}
+const U32 = {};
+function u32(hex) { if (U32[hex] !== undefined) return U32[hex]; const [r, g, b] = hx2(hex); return U32[hex] = ((255 << 24) | (b << 16) | (g << 8) | r) >>> 0; }
+
+/* Painter: an RGBA buffer we can set pixels in, then turn into a canvas */
+function Painter(w, h) { const c = document.createElement('canvas'); c.width = w; c.height = h; const x = c.getContext('2d'); const id = x.createImageData(w, h); const d = new Uint32Array(id.data.buffer);
+  return { c, x, d, w, h, id,
+    set(px, py, hex) { px |= 0; py |= 0; if (px < 0 || py < 0 || px >= w || py >= h || !hex) return; d[py * w + px] = u32(hex); },
+    has(px, py) { px |= 0; py |= 0; return px >= 0 && py >= 0 && px < w && py < h && d[py * w + px] !== 0; },
+    rect(px, py, rw, rh, hex) { for (let y = py | 0; y < (py + rh) | 0; y++) for (let x2 = px | 0; x2 < (px + rw) | 0; x2++) this.set(x2, y, hex); },
+    flush() { x.putImageData(id, 0, 0); return c; } }; }
+
+/* light: from upper-left, slightly in front */
+const LX = -.5, LY = -.72, LZ = .48;
+const LNRM = Math.hypot(LX, LY, LZ), Lx = LX / LNRM, Ly = LY / LNRM, Lz = LZ / LNRM;
+const BANDS = [-.1, .26, .6, .86];
+
+/* shape → per-pixel normal (or null) */
+function shapeBox(p) {
+  if (p.t === 'e') { const m = Math.max(p.rx, p.ry) + 1; return [p.cx - m, p.cy - m, p.cx + m, p.cy + m]; }
+  if (p.t === 'c') { const m = Math.max(p.r1, p.r2) + 1; return [Math.min(p.x1, p.x2) - m, Math.min(p.y1, p.y2) - m, Math.max(p.x1, p.x2) + m, Math.max(p.y1, p.y2) + m]; }
+  if (p.t === 'p') { const xs = p.pts.map(q => q[0]), ys = p.pts.map(q => q[1]); return [Math.min(...xs) - 1, Math.min(...ys) - 1, Math.max(...xs) + 1, Math.max(...ys) + 1]; }
+}
+function shapeN(p, X, Y) {
+  if (p.t === 'e') { const r = p.rot || 0, cs = Math.cos(r), sn = Math.sin(r); const dx = X - p.cx, dy = Y - p.cy; const lx = dx * cs + dy * sn, ly = -dx * sn + dy * cs;
+    const u = lx / p.rx, v = ly / p.ry, d = u * u + v * v; if (d > 1) return null; const nz = Math.sqrt(1 - d); return [u * cs - v * sn, u * sn + v * cs, nz * (p.flatness || 1)]; }
+  if (p.t === 'c') { const ax = p.x2 - p.x1, ay = p.y2 - p.y1, L2 = ax * ax + ay * ay || 1e-6; let t = ((X - p.x1) * ax + (Y - p.y1) * ay) / L2; t = clamp(t, 0, 1);
+    const qx = p.x1 + ax * t, qy = p.y1 + ay * t, r = p.r1 + (p.r2 - p.r1) * t, dx = X - qx, dy = Y - qy, d = Math.hypot(dx, dy); if (d > r) return null; const k = d / r; return [dx / r, dy / r, Math.sqrt(Math.max(0, 1 - k * k))]; }
+  if (p.t === 'p') { let ins = false; const q = p.pts; for (let i = 0, j = q.length - 1; i < q.length; j = i++) { if (((q[i][1] > Y) !== (q[j][1] > Y)) && (X < (q[j][0] - q[i][0]) * (Y - q[i][1]) / (q[j][1] - q[i][1]) + q[i][0])) ins = !ins; }
+    if (!ins) return null; const b = p._b || (p._b = shapeBox(p)); const ry = (Y - b[1]) / (b[3] - b[1] || 1); return [0, (ry - .45) * .9, .8]; }
+  return null;
+}
+function bandIdx(n, x, y, p) { if (p.flat) return p.flat === true ? 2 : p.flat;
+  const nl = Math.hypot(n[0], n[1], n[2]) || 1; let I = (n[0] * Lx + n[1] * Ly + n[2] * Lz) / nl; I += (bay(x, y) - .5) * (p.dither ?? .16) + (p.bias || 0);
+  let i = I > BANDS[3] ? 4 : I > BANDS[2] ? 3 : I > BANDS[1] ? 2 : I > BANDS[0] ? 1 : 0; return clamp(i, p.min || 0, p.shiny ? 4 : (p.max ?? 3)); }
+
+/* line helper */
+function linePts(x0, y0, x1, y1) { x0 = Math.round(x0); y0 = Math.round(y0); x1 = Math.round(x1); y1 = Math.round(y1); const pts = []; const dx = Math.abs(x1 - x0), dy = -Math.abs(y1 - y0), sx = x0 < x1 ? 1 : -1, sy = y0 < y1 ? 1 : -1; let e = dx + dy;
+  for (let i = 0; i < 400; i++) { pts.push([x0, y0]); if (x0 === x1 && y0 === y1) break; const e2 = 2 * e; if (e2 >= dy) { e += dy; x0 += sx; } if (e2 <= dx) { e += dx; y0 += sy; } } return pts; }
+
+/* ---- sprite part constructors ---- */
+const E = (cx, cy, rx, ry, c, o) => Object.assign({ t: 'e', cx, cy, rx, ry, c }, o);
+const C = (x1, y1, x2, y2, r1, r2, c, o) => Object.assign({ t: 'c', x1, y1, x2, y2, r1, r2: r2 ?? r1, c }, o);
+const Pg = (pts, c, o) => Object.assign({ t: 'p', pts, c }, o);
+const EYE = (x, y, o) => Object.assign({ t: 'eye', x, y }, o);
+const PX = (pts, c, o) => Object.assign({ t: 'px', pts, c }, o);
+const LN = (pts, c, o) => Object.assign({ t: 'ln', pts, c }, o);
+const OUTLINE = '#120f1c';
+
+/* rasterise a list of parts into a sprite frame */
+function raster(w, h, parts, opt) {
+  opt = opt || {};
+  const N = w * h, col = new Array(N).fill(null), pid = new Int16Array(N).fill(-1), ri = new Int8Array(N), rp = new Array(N);
+  const late = [];
+  parts.forEach((p, k) => {
+    if (!p) return;
+    if (p.t === 'eye' || p.t === 'px' || p.t === 'ln') { late.push(p); return; }
+    const R0 = ramp(p.c); const b = shapeBox(p);
+    for (let y = Math.max(0, Math.floor(b[1])); y <= Math.min(h - 1, Math.ceil(b[3])); y++)
+      for (let x = Math.max(0, Math.floor(b[0])); x <= Math.min(w - 1, Math.ceil(b[2])); x++) {
+        const n = shapeN(p, x + .5, y + .5); if (!n) continue;
+        if (p.clip && !p.clip(x, y)) continue;
+        let R = R0; if (p.pat) { const pc = p.pat(x, y, n); if (pc) R = ramp(pc); }
+        let idx = bandIdx(n, x, y, p); if (p.dim) idx = clamp(idx - p.dim, 0, 4);
+        const i = y * w + x; col[i] = R[idx]; pid[i] = k; ri[i] = idx; rp[i] = R;
+      }
+  });
+  const out = col.slice();
+  // creases: darken the back part where a front part overlaps it
+  for (let i = 0; i < N; i++) { const a = pid[i]; if (a < 0) continue; const x = i % w, y = (i / w) | 0;
+    for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const nx = x + dx, ny = y + dy; if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue; const b = pid[ny * w + nx];
+      if (b > a && !parts[b].blend && !parts[a].noCrease) { out[i] = rp[i][Math.max(0, ri[i] - 2)]; break; } } }
+  // selective outline
+  if (!opt.noOutline) {
+    const filled = i => pid[i] >= 0;
+    for (let i = 0; i < N; i++) { if (filled(i)) continue; const x = i % w, y = (i / w) | 0; let best = null;
+      for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const nx = x + dx, ny = y + dy; if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue; const j = ny * w + nx; if (filled(j) && !parts[pid[j]].noOutline) { best = rp[j]; if (dy === -1 || dx === -1) break; } }
+      if (best) out[i] = mixH(best[0], OUTLINE, opt.soft ? .25 : .55); }
+  }
+  const eyes = [], glows = [];
+  for (const p of late) {
+    if (p.t === 'px') for (const [x, y] of p.pts) { if (x < 0 || y < 0 || x >= w || y >= h) continue; out[y * w + x] = p.c; if (p.glow) glows.push([x, y, p.c]); }
+    if (p.t === 'ln') { for (let s = 0; s < p.pts.length - 1; s++) for (const [x, y] of linePts(p.pts[s][0], p.pts[s][1], p.pts[s + 1][0], p.pts[s + 1][1])) { if (x < 0 || y < 0 || x >= w || y >= h) continue; out[y * w + x] = p.c; if (p.glow) glows.push([x, y, p.c]); } }
+    if (p.t === 'eye') { const x = Math.round(p.x), y = Math.round(p.y), s = p.size || 1;
+      if (p.closed) { const under = rp[y * w + x] || ramp(p.lid || '#555555'); for (let k = 0; k < Math.max(2, s); k++) { const xx = x + k - (s > 1 ? 0 : 0); if (xx < w) out[y * w + xx] = under[0]; } continue; }
+      const dark = p.pupil || '#120e18';
+      if (s === 1) { out[y * w + x] = p.iris || dark; if (p.ring) for (const [dx, dy] of [[-1, 0], [1, 0], [0, -1], [0, 1]]) { const xx = x + dx, yy = y + dy; if (xx >= 0 && yy >= 0 && xx < w && yy < h && pid[yy * w + xx] >= 0) out[yy * w + xx] = p.ring; } }
+      else { for (let dy = 0; dy < s; dy++) for (let dx = 0; dx < s; dx++) { if (x + dx < w && y + dy < h) out[(y + dy) * w + x + dx] = p.iris || dark; }
+        if (p.iris) out[(y + s - 1) * w + x + s - 1] = dark; out[y * w + x] = '#ffffff'; if (p.ring) for (let k = -1; k <= s; k++) { for (const [xx, yy] of [[x + k, y - 1], [x + k, y + s], [x - 1, y + k], [x + s, y + k]]) if (xx >= 0 && yy >= 0 && xx < w && yy < h && pid[yy * w + xx] >= 0 && out[yy * w + xx] !== '#ffffff') out[yy * w + xx] = p.ring; } }
+      eyes.push([x + (s > 1 ? 1 : 0), y]); }
+  }
+  for (const p of parts) if (p && p.glow && p.t !== 'px' && p.t !== 'ln') { /* glowing filled part */ const b = shapeBox(p); for (let y = Math.max(0, Math.floor(b[1])); y <= Math.min(h - 1, Math.ceil(b[3])); y++) for (let x = Math.max(0, Math.floor(b[0])); x <= Math.min(w - 1, Math.ceil(b[2])); x++) if (shapeN(p, x + .5, y + .5)) glows.push([x, y, ramp(p.c)[3]]); }
+  const P = Painter(w, h); for (let i = 0; i < N; i++) if (out[i]) P.d[i] = u32(out[i]); P.flush();
+  // bounding box of content
+  let x0 = w, y0 = h, x1 = 0, y1 = 0; for (let i = 0; i < N; i++) if (out[i]) { const x = i % w, y = (i / w) | 0; if (x < x0) x0 = x; if (y < y0) y0 = y; if (x > x1) x1 = x; if (y > y1) y1 = y; }
+  return { cv: P.c, w, h, eyes, glows, bb: [x0, y0, x1, y1] };
+}
+
+/* paint a shaded shape straight into a Painter (for scenery) */
+function paint(P, p) {
+  const R0 = ramp(p.c); const b = shapeBox(p);
+  for (let y = Math.max(0, Math.floor(b[1])); y <= Math.min(P.h - 1, Math.ceil(b[3])); y++)
+    for (let x = Math.max(0, Math.floor(b[0])); x <= Math.min(P.w - 1, Math.ceil(b[2])); x++) {
+      const n = shapeN(p, x + .5, y + .5); if (!n) continue; if (p.clip && !p.clip(x, y)) continue;
+      let R = R0; if (p.pat) { const pc = p.pat(x, y, n); if (pc) R = ramp(pc); }
+      let idx = bandIdx(n, x, y, p); if (p.dim) idx = clamp(idx - p.dim, 0, 4);
+      P.set(x, y, p.raw ? R[2] : R[idx]);
+    }
+}
+function paintLine(P, pts, c) { for (let s = 0; s < pts.length - 1; s++) for (const [x, y] of linePts(pts[s][0], pts[s][1], pts[s + 1][0], pts[s + 1][1])) P.set(x, y, c); }
+/* dithered vertical gradient over a list of colour stops */
+function vgrad(P, x0, y0, w, h, stops, mask) {
+  const lv = Math.max(2, Math.round(h / 4)), cols = [];
+  for (let i = 0; i < lv; i++) { const t = i / (lv - 1) * (stops.length - 1), k = Math.min(stops.length - 2, Math.floor(t)); cols.push(mixH(stops[k], stops[k + 1], t - k)); }
+  for (let y = y0; y < y0 + h; y++) { const t = (y - y0) / Math.max(1, h - 1) * (lv - 1); const i = Math.min(lv - 2, Math.floor(t)); const fr = t - i;
+    for (let x = x0; x < x0 + w; x++) { if (mask && !mask(x, y)) continue; P.set(x, y, fr > bay(x, y) ? cols[i + 1] : cols[i]); } }
+}
+/* pattern helpers (return a function (x,y)->hex|null) */
+const pat = {
+  spots: (c, d, s, seed) => (x, y) => hash(Math.floor(x / (s || 1)), Math.floor(y / (s || 1)), seed || 3) < d ? c : null,
+  stripes: (c, per, wid, ang, wob, seed) => (x, y) => { const a = ang || 0; const v = x * Math.cos(a) + y * Math.sin(a) + Math.sin(y * .7 + (seed || 0)) * (wob || 0); return ((v % per) + per) % per < wid ? c : null; },
+  rosette: (c, inner, cell) => (x, y) => { cell = cell || 5; const cx = Math.floor(x / cell), cy = Math.floor(y / cell); let best = 9, bi = 0;
+      for (let j = -1; j <= 1; j++) for (let i = -1; i <= 1; i++) { const px = (cx + i) * cell + hash(cx + i, cy + j, 7) * cell, py = (cy + j) * cell + hash(cx + i, cy + j, 9) * cell; const d = Math.hypot(x + .5 - px, y + .5 - py); if (d < best) { best = d; bi = hash(cx + i, cy + j, 11); } }
+      if (best > 1.15 && best < 2.1 && hash(x, y, 5) > .18) return c; if (best <= 1.15 && inner && bi > .4) return inner; return null; },
+  patches: (line, cell, seed) => (x, y) => { cell = cell || 5; const cx = Math.floor(x / cell), cy = Math.floor(y / cell); let d1 = 99, d2 = 99;
+      for (let j = -1; j <= 1; j++) for (let i = -1; i <= 1; i++) { const px = (cx + i) * cell + .2 * cell + hash(cx + i, cy + j, seed || 1) * cell * .6, py = (cy + j) * cell + .2 * cell + hash(cx + i, cy + j, (seed || 1) + 5) * cell * .6; const d = Math.hypot(x + .5 - px, y + .5 - py); if (d < d1) { d2 = d1; d1 = d; } else if (d < d2) d2 = d; }
+      return d2 - d1 < .9 ? line : null; },
+  rings: (c, cell) => (x, y) => { cell = cell || 4; const cx = Math.floor(x / cell), cy = Math.floor(y / cell); const px = cx * cell + cell / 2 + (hash(cx, cy, 2) - .5), py = cy * cell + cell / 2 + (hash(cx, cy, 4) - .5); const d = Math.hypot(x + .5 - px, y + .5 - py); return d > .9 && d < 1.7 && hash(cx, cy, 6) > .3 ? c : null; },
+  any: (...fs) => (x, y, n) => { for (const f of fs) { const r = f(x, y, n); if (r) return r; } return null; },
+};
+/* ================= Creatures ================= */
+function sh(parts, dx, dy) {
+  if (!dx && !dy) return parts;
+  return parts.map(p => { if (!p) return p; const q = Object.assign({}, p);
+    if (q.t === 'e') { q.cx += dx; q.cy += dy; } else if (q.t === 'c') { q.x1 += dx; q.x2 += dx; q.y1 += dy; q.y2 += dy; }
+    else if (q.t === 'p') { q.pts = q.pts.map(([x, y]) => [x + dx, y + dy]); delete q._b; }
+    else if (q.t === 'eye') { q.x += dx; q.y += dy; } else if (q.t === 'px' || q.t === 'ln') q.pts = q.pts.map(([x, y]) => [x + dx, y + dy]);
+    return q; });
+}
+const S2 = (ph, k) => Math.sin((ph + (k || 0)) * TAU);
+const step = (ph, n) => Math.floor(ph * n);
+
+/* Four-legged walker. o.body/o.tail/o.head return parts; legs are generated. */
+function quad(o) {
+  return { w: o.w, h: o.h, ax: o.ax, ay: o.ay ?? o.h - 2, n: 4, draw(st, ph) {
+    const sl = st === 'sleep', lay = sl && !o.sleepStand, L = o.legs;
+    const drop = lay ? (o.layDrop ?? Math.round(L.len * .75)) : 0;
+    const bob = !sl && (step(ph, 4) % 2 === 1) ? 1 : 0;
+    const dy = drop + bob;
+    const P = [];
+    const leg = (x, off, far, front) => {
+      const top = (front && L.ftop != null ? L.ftop : L.top) + dy, len = front && L.flen ? L.flen : L.len;
+      const dim = far ? 1 : 0, c = L.c || o.c;
+      if (lay) { const dir = front ? 1 : -1; return [C(x, top - 1, x + dir * len * .55, top + .5, L.r1, L.r2, c, { dim, pat: o.legPat, blend: true })]; }
+      const a = sl ? 0 : S2(ph, off), sw = a * L.swing, lift = sl ? 0 : Math.max(0, -Math.cos((ph + off) * TAU)) * L.lift;
+      const rk = L.rk ?? (L.r1 + L.r2) / 2;
+      const kx = x + sw * .45 + (front ? -.4 : .9), ky = top + len * .5 - lift * .3, fx = x + sw, fy = top + len - lift;
+      const r = [C(x, top - 1, kx, ky, L.r1, rk, c, { dim, pat: o.legPat, blend: true }), C(kx, ky, fx, fy, rk, L.r2, c, { dim, pat: o.legPat, blend: true })];
+      if (L.foot) r.push(E(fx + .6, fy - .3, L.fr ?? L.r2 + .4, 1.1, L.foot, { dim, blend: true }));
+      return r;
+    };
+    P.push(...leg(L.back + (L.farDx || 1), .5, true, false), ...leg(L.front + (L.farDx || 1), 0, true, true));
+    const tail = o.tail ? sh(o.tail(sl, ph), 0, dy) : [];
+    if (!(sl && o.curl)) P.push(...tail);
+    P.push(...sh(o.body(sl, ph), 0, dy));
+    P.push(...leg(L.back, 0, false, false), ...leg(L.front, .5, false, true));
+    let hx = 0, hy = 0; if (lay) { hx = (o.layHead || [1, 2])[0]; hy = (o.layHead || [1, 2])[1]; } else if (sl) { hx = (o.droop || [0, 2])[0]; hy = (o.droop || [0, 2])[1]; }
+    else if (o.headBob) hy = step(ph, 4) % 2 ? 0 : -o.headBob;
+    P.push(...sh(o.head(sl, ph, hx, hy), 0, dy));
+    if (sl && o.curl) P.push(...tail);
+    return P;
+  } };
+}
+
+/* Swimmer with a wagging tail */
+function fish(o) { return { w: o.w, h: o.h, ay: o.ay ?? Math.round(o.h / 2), n: 4, alpha: o.alpha, draw(st, ph) { const sl = st === 'sleep'; const wag = sl ? 0 : S2(ph) * (o.wag ?? 1.5); return o.parts(sl, ph, wag); } }; }
+
+const SPR = {};
+const sleepEye = (x, y, sl, o) => EYE(x, y, Object.assign({ closed: sl }, o));
+
+/* ---------- SAVANNAH ---------- */
+SPR.lion = quad({ w: 46, h: 30, ay: 27, c: '#c99a55', sleepStand: false, layHead: [1, 3], headBob: 0,
+  legs: { back: 12, front: 29, top: 16, len: 10, r1: 3.1, rk: 2.3, r2: 1.8, swing: 2.6, lift: 1.6, foot: '#c08a48', fr: 2.2 },
+  body: () => [E(21, 13, 12, 6.2, '#c99a55'), E(29, 14.5, 5.5, 6, '#c99a55', { blend: true }), E(21, 17.5, 8, 1.8, '#e3c58e', { blend: true, max: 2, noCrease: true })],
+  tail: (sl, ph) => { const s = sl ? 0 : S2(ph) * 1.2; return [C(9, 11, 4, 15, 1.1, .8, '#c99a55'), C(4, 15, 3 + s, 21, .8, .7, '#c99a55', { blend: true }), E(3 + s, 22, 1.6, 1.9, '#4d2e17')]; },
+  head: (sl, ph, hx, hy) => sh([E(32, 11, 7, 8, '#7d4a22', { pat: pat.stripes('#5e3416', 3, 1, .9, .6) }), E(29, 13, 3, 5, '#7d4a22', { blend: true }), E(36, 10.5, 4.6, 4, '#d4a766'), E(39.3, 12.5, 2.6, 2, '#ead2a0', { blend: true }), E(33, 5.2, 1.6, 1.6, '#7d4a22'),
+    PX([[41, 11], [42, 11], [41, 12]], '#3b2626'), PX([[40, 14]], '#5a3a2a'), sleepEye(37, 9, sl)], hx, hy) });
+
+SPR.cheetah = quad({ w: 44, h: 28, ay: 25, c: '#dcae62', layHead: [1, 3],
+  legs: { back: 11, front: 28, top: 14, len: 11, r1: 2.3, rk: 1.6, r2: 1.2, swing: 3.4, lift: 2, foot: '#d2a258', fr: 1.6 }, legPat: pat.spots('#2b2117', .14, 1, 4),
+  body: () => [E(19, 12, 11.5, 4.7, '#dcae62', { pat: pat.spots('#2b2117', .2, 1, 3) }), E(28, 12.5, 4.6, 4.6, '#dcae62', { blend: true, pat: pat.spots('#2b2117', .2, 1, 3) }), E(19, 15.3, 8, 1.4, '#f0dcb0', { blend: true, noCrease: true, max: 2 })],
+  tail: (sl, ph) => { const s = sl ? 0 : S2(ph) * 1.4; return [C(8, 11, 3, 15, 1.1, .9, '#dcae62'), C(3, 15, 4 + s, 22, .9, .8, '#dcae62', { blend: true, pat: pat.stripes('#2b2117', 2.2, 1, Math.PI / 2) }), PX([[4 + Math.round(s), 23]], '#f2ead8')]; },
+  head: (sl, ph, hx, hy) => sh([C(29, 10, 33, 8, 3, 2.4, '#dcae62', { blend: true }), E(35, 8, 3.7, 3.2, '#dcae62', { pat: pat.spots('#2b2117', .1, 1, 6) }), E(37.8, 9.6, 1.9, 1.6, '#f2e2bc', { blend: true }), E(33.2, 4.8, 1.2, 1.2, '#b88a46'),
+    PX([[39, 8], [39, 9]], '#2a1e1a'), LN([[36, 8], [36, 10], [37, 11]], '#2b2117'), sleepEye(36, 7, sl)], hx, hy) });
+
+SPR.hyena = quad({ w: 42, h: 30, ay: 27, c: '#b89d72', layHead: [2, 3],
+  legs: { back: 11, front: 27, top: 17, ftop: 15, len: 9, flen: 11, r1: 2.5, rk: 1.8, r2: 1.4, swing: 2.4, lift: 1.5, foot: '#6a5236', fr: 1.6 }, legPat: pat.spots('#4a3624', .2, 2, 8),
+  body: () => [E(19, 14, 11, 6, '#b89d72', { rot: -.2, pat: pat.spots('#4a3624', .28, 2, 8) }), E(27, 12, 5, 5.5, '#b89d72', { blend: true, pat: pat.spots('#4a3624', .28, 2, 8) })],
+  tail: (sl, ph) => [C(8, 14, 5, 19 + (sl ? 0 : S2(ph)), 1.2, 1, '#8a7050'), E(5, 20 + (sl ? 0 : S2(ph)), 1.3, 1.8, '#2e2218')],
+  head: (sl, ph, hx, hy) => sh([C(27, 10, 32, 9, 4, 3.4, '#b89d72', { blend: true, pat: pat.spots('#4a3624', .2, 2, 9) }), LN([[25, 7], [30, 5]], '#4a3624'), E(34, 9.5, 4.6, 3.9, '#b89d72'), E(37.6, 11, 2.7, 2.2, '#4a3a2c', { blend: true }),
+    E(32, 5, 1.8, 2, '#8a7050'), PX([[39, 10], [40, 10]], '#1a1412'), sleepEye(35, 8, sl)], hx, hy) });
+
+SPR.zebra = quad({ w: 40, h: 34, ay: 31, c: '#efebe3', sleepStand: true, droop: [1, 3],
+  legs: { back: 11, front: 25, top: 18, len: 12, r1: 2.7, rk: 1.9, r2: 1.4, swing: 2.2, lift: 1.4, foot: '#26222a', fr: 1.6 }, legPat: pat.stripes('#1c1a22', 2.4, 1.1, Math.PI / 2),
+  body: () => [E(18, 15, 11.5, 6.2, '#efebe3', { pat: pat.stripes('#1c1a22', 3.2, 1.5, .1, 1.1) }), E(9, 14, 5, 5.6, '#efebe3', { blend: true, pat: pat.stripes('#1c1a22', 3, 1.3, 1.2, .5) })],
+  tail: (sl, ph) => { const s = sl ? 0 : S2(ph) * .8; return [C(6, 12, 4 + s, 22, .9, .6, '#efebe3'), E(4 + s, 23, 1, 1.8, '#1c1a22')]; },
+  head: (sl, ph, hx, hy) => sh([C(26, 12, 31, 6, 4.1, 3, '#efebe3', { blend: true, pat: pat.stripes('#1c1a22', 2.8, 1.3, .5, .3) }), LN([[25, 9], [30, 2]], '#1c1a22'), LN([[26, 9], [31, 3]], '#3a3640'),
+    E(33, 6.5, 3.4, 2.8, '#efebe3', { rot: .6, pat: pat.stripes('#1c1a22', 2.6, 1.2, .9) }), C(33, 7, 36, 11, 2.6, 1.8, '#efebe3', { blend: true, pat: pat.stripes('#1c1a22', 2.6, 1.1, 2.1) }), E(36.6, 11.6, 1.7, 1.5, '#2a2730'),
+    C(31.5, 3, 31, 0, 1, .6, '#efebe3'), sleepEye(33, 6, sl)], hx, hy) });
+
+SPR.wildebeest = quad({ w: 40, h: 34, ay: 31, c: '#6d727d', layHead: [1, 4],
+  legs: { back: 11, front: 26, top: 19, len: 11, r1: 2.3, rk: 1.6, r2: 1.1, swing: 2.2, lift: 1.4, c: '#5a5e68', foot: '#24242a', fr: 1.3 },
+  body: () => [E(17, 15, 11, 6.4, '#6d727d', { pat: pat.stripes('#4e525c', 3, 1, .25, .8) }), E(25, 12, 6, 6.4, '#6d727d', { blend: true, pat: pat.stripes('#4e525c', 3, 1, .25, .8) })],
+  tail: (sl, ph) => { const s = sl ? 0 : S2(ph); return [C(6, 13, 4 + s, 21, .8, .6, '#3a3c44'), E(4 + s, 22, 1.1, 2.6, '#26272d')]; },
+  head: (sl, ph, hx, hy) => sh([C(26, 12, 30, 9, 3.7, 3, '#6d727d', { blend: true }), LN([[24, 7], [29, 6]], '#26272d'), C(31, 8, 35, 16, 3.2, 2.3, '#3a3c46'), E(35.4, 16.5, 1.8, 1.5, '#2a2a30'),
+    LN([[30, 13], [30, 19]], '#e6e0d4'), LN([[31, 14], [31, 18]], '#d6d0c4'),
+    LN([[31, 6], [29, 5], [28, 3], [29, 1]], '#2a2620'), LN([[33, 6], [35, 4], [35, 2], [34, 1]], '#3a3630'), sleepEye(33, 10, sl)], hx, hy) });
+
+SPR.elephant = { w: 60, h: 46, ay: 43, n: 4, draw(st, ph) {
+  const sl = st === 'sleep', c = '#8e8a88', skin = pat.spots('#7a7674', .12, 1, 21);
+  const sw = k => sl ? 0 : S2(ph, k) * 1.6;
+  const legP = (x, k, far) => { const s = sw(k); return [C(x, 27, x + s, 40, 4.8, 4.2, c, { dim: far ? 1 : 0, pat: skin, blend: true }), E(x + s + .4, 41.4, 4.6, 1.5, '#78726e', { dim: far ? 1 : 0, blend: true })]; };
+  const ear = sl ? 0 : S2(ph) * 1.2, tr = sl ? 0 : S2(ph, .2) * 1.4, dh = sl ? 1 : 0;
+  return [...legP(17, .5, true), ...legP(36, 0, true),
+    C(9, 18, 6 + (sl ? 0 : S2(ph) * .6), 31, .9, .6, c), E(6, 32, .9, 1.6, '#3a3634'),
+    E(25, 21, 16.5, 12, c, { pat: skin }), E(23, 13, 10, 5, c, { blend: true, pat: skin }),
+    ...legP(20, 0, false), ...legP(39, .5, false),
+    E(43, 17 + dh, 8, 8.6, c, { pat: skin }),
+    E(38 - ear * .3, 18 + dh, 6.2 + ear, 8.8, '#8a8584', { rot: .12, pat: pat.any(pat.stripes('#78716f', 3.5, .8, 1.2, .8), skin) }),
+    C(48, 22 + dh, 50 + tr * .4, 31 + dh, 3.3, 2.6, c, { pat: pat.stripes('#7a7674', 2, .8, Math.PI / 2) }), C(50 + tr * .4, 31 + dh, 49 + tr, 38 + dh, 2.6, 2, c, { blend: true, pat: pat.stripes('#7a7674', 2, .8, Math.PI / 2) }), C(49 + tr, 38 + dh, 51 + tr, 41 + dh, 2, 1.6, c, { blend: true }),
+    C(46, 25 + dh, 53, 28 + dh, 1.2, .7, '#efe8d6', { shiny: true }),
+    PX([[45, 27 + dh]], '#4a4442'), sleepEye(46, 15 + dh, sl)];
+} };
+
+SPR.giraffe = { w: 42, h: 64, ay: 61, n: 4, draw(st, ph) {
+  const sl = st === 'sleep', c = '#c07834', pt = pat.patches('#f1e2c0', 4.6, 3);
+  const legP = (x, k, far, front) => { const s = sl ? 0 : S2(ph, k) * 2.2, lift = sl ? 0 : Math.max(0, -Math.cos((ph + k) * TAU)) * 1.6; const kx = x + s * .45 + (front ? -.3 : .8);
+    return [C(x, 39, kx, 49, 2.6, 1.8, c, { dim: far ? 1 : 0, pat: pt, blend: true }), C(kx, 49, x + s, 59 - lift, 1.8, 1.3, c, { dim: far ? 1 : 0, pat: pt, blend: true }), E(x + s + .4, 59.4 - lift, 1.6, 1, '#3a2a1e', { dim: far ? 1 : 0 })]; };
+  const nk = sl ? 0 : S2(ph) * .8, dd = sl ? 2 : 0;
+  return [...legP(12, .5, true), ...legP(23, 0, true, true),
+    C(8, 33, 5, 45 + (sl ? 0 : S2(ph) * .5), .7, .5, c), E(5, 46, .9, 1.6, '#2a1e16'),
+    E(17, 35, 10, 6.6, c, { rot: -.28, pat: pt }),
+    ...legP(14, 0, false), ...legP(25, .5, false, true),
+    C(23, 31, 31 + nk, 11 + dd, 4.2, 2.4, c, { pat: pt }), LN([[21, 29], [29 + nk, 9 + dd]], '#8a5a2a'), LN([[22, 29], [30 + nk, 9 + dd]], '#a8743a'),
+    ...sh([E(33, 8, 3.4, 2.6, c, { rot: .5 }), C(33, 8, 37, 12, 2.4, 1.8, c, { blend: true }), E(37.3, 12.4, 1.4, 1.2, '#b88848', { blend: true }), C(31.5, 5, 30.6, 1.5, .9, .8, '#6a4020'), PX([[30, 1], [31, 1]], '#2a1a10'), C(30.5, 7, 27.5, 6, 1, .6, c), sleepEye(33, 7, sl)], nk, dd)];
+} };
+
+SPR.aardvark = quad({ w: 44, h: 26, ay: 23, c: '#b9917a', layHead: [1, 2],
+  legs: { back: 12, front: 26, top: 15, len: 7, r1: 2.7, rk: 2.2, r2: 1.8, swing: 1.8, lift: 1.2, foot: '#8a6a5a', fr: 2.1 },
+  body: () => [E(19, 12, 11, 6.6, '#b9917a', { rot: -.08, pat: pat.spots('#a07a64', .12, 1, 4) })],
+  tail: (sl, ph) => [C(9, 12, 2, 19 + (sl ? 0 : S2(ph) * .6), 3.2, 1.2, '#b18a72')],
+  head: (sl, ph, hx, hy) => sh([C(28, 11, 31, 13, 4.2, 3.2, '#b9917a', { blend: true }), E(32.5, 13, 3.4, 3, '#b9917a'), C(34, 13.5, 40, 16.5, 2.2, 1.3, '#c9a28c'), E(40.6, 16.6, 1.1, 1.1, '#e0b4a4'),
+    C(31, 10, 30, 3, 1.7, 1.1, '#c79c86'), C(32, 10, 33, 4, 1.4, 1, '#b48a74'), sleepEye(33, 12, sl)], hx, hy) });
+
+SPR.vulture = { w: 46, h: 30, ay: 25, n: 4, draw(st, ph) {
+  const sl = st === 'sleep';
+  if (sl) return [C(20, 22, 18, 28, 2.2, 1.4, '#3a2c24'), E(22, 17, 5, 7, '#4a3a30', { rot: .2, pat: pat.stripes('#3a2c24', 2.5, .9, .4) }), E(21, 13.5, 3.4, 2.6, '#e6dccc', { blend: true }),
+    E(23, 12, 3.2, 1.8, '#ece4d6'), C(24, 11, 26, 8, 1.4, 1.2, '#9a8c88'), E(27, 7, 2.4, 2, '#8a7a78'), C(28, 7, 31, 8, 1, .6, '#3a3432'), PX([[21, 24], [23, 24], [22, 25], [24, 25]], '#6a6060'), EYE(27, 6, { closed: true })];
+  const f = S2(ph) * 1.6;
+  const band = (x, y) => { const d = Math.abs(x - 23); return d > 5 && d < 17 && y < 12.6 + f * (d / 20) ? '#e6dccc' : null; };
+  const wing = s => { const tx = s < 0 ? 1 : 45, q = v => 23 + s * v; return Pg([[q(2), 10], [q(10), 9 + f * .5], [tx, 9 + f], [q(21), 11.5 + f], [q(22.5), 12 + f], [q(20), 13 + f], [q(21.5), 14 + f], [q(18), 14.5 + f], [q(19), 16 + f], [q(14), 15 + f * .6], [q(2), 15]], '#3e3028', { pat: band }); };
+  return [wing(-1), wing(1), E(20, 13, 3.4, 2.2, '#3a2c24'), E(23.5, 12.6, 4.4, 2.8, '#4a3a30'), C(27, 12, 30, 11.5, 1.3, 1.1, '#9a8c88'), E(31, 11.4, 1.8, 1.5, '#8a7a78'), PX([[33, 12]], '#3a3432'), EYE(31, 11)];
+} };
+
+/* ---------- ARCTIC ---------- */
+SPR.polarbear = quad({ w: 48, h: 30, ay: 27, c: '#f2efe4', layHead: [1, 3],
+  legs: { back: 13, front: 31, top: 16, len: 9, r1: 3.8, rk: 3.1, r2: 2.9, swing: 2.1, lift: 1.3, foot: '#e0dacb', fr: 3.2 },
+  body: () => [E(22, 14, 13, 7.2, '#f2efe4'), E(12, 13, 6, 6.6, '#f2efe4', { blend: true }), E(22, 19, 10, 2, '#e4ddca', { blend: true, noCrease: true, max: 2 })],
+  tail: () => [E(7, 11, 1.4, 1.4, '#f2efe4')],
+  head: (sl, ph, hx, hy) => sh([C(31, 13, 37, 14, 5.2, 3.4, '#f2efe4', { blend: true }), E(39, 15, 3.6, 3, '#f2efe4'), E(42, 16, 2.2, 1.7, '#ece6d6', { blend: true }), PX([[44, 15], [44, 16], [43, 15]], '#1a1820'), E(37, 11.5, 1.2, 1, '#e2ddcf'), sleepEye(40, 14, sl)], hx, hy) });
+
+SPR.arcticfox = quad({ w: 32, h: 22, ay: 19, c: '#e9e7e8', curl: true, layDrop: 3, layHead: [-1, 3],
+  legs: { back: 9, front: 18, top: 13, len: 5, r1: 1.7, rk: 1.3, r2: 1, swing: 1.7, lift: 1, c: '#cfcac4', foot: '#bdb6ae', fr: 1.1 },
+  body: () => [E(14, 11, 7, 4.2, '#e9e7e8', { pat: pat.spots('#cfc8c0', .1, 1, 5) })],
+  tail: (sl, ph) => sl ? [E(15, 13, 8, 2.8, '#eeeef0', { rot: .05 })] : [E(5, 9 + S2(ph) * .6, 5.4, 3, '#eeeef0', { rot: -.5 })],
+  head: (sl, ph, hx, hy) => sh([C(19, 10, 22, 8, 3.1, 2.6, '#e9e7e8', { blend: true }), E(23.5, 8, 3, 2.6, '#e9e7e8'), C(25, 9, 28, 9.6, 1.6, .9, '#e9e7e8', { blend: true }), PX([[28, 9]], '#1a1820'),
+    Pg([[20.5, 6.5], [21.5, 2.5], [23.5, 5.5]], '#e0dcd8'), sleepEye(24, 7, sl)], hx, hy) });
+
+SPR.reindeer = quad({ w: 38, h: 36, ay: 33, c: '#9a8a74', layHead: [0, 4],
+  legs: { back: 10, front: 22, top: 23, len: 9, r1: 2.7, rk: 2, r2: 1.5, swing: 2, lift: 1.3, c: '#8c7b66', foot: '#3a3028', fr: 1.7 },
+  body: () => [E(16, 20, 11, 6.6, '#9a8a74', { pat: pat.spots('#b4a48c', .1, 1, 2) }), E(16, 24.5, 8, 2, '#ece6d8', { blend: true, noCrease: true })],
+  tail: () => [E(5, 18, 1.6, 1.6, '#efe9dc')],
+  head: (sl, ph, hx, hy) => sh([C(24, 18, 28, 13, 4.6, 3.2, '#e6e0d2', { blend: true }), E(30, 12, 3.3, 2.6, '#8c7b66', { rot: .5 }), E(32.6, 14, 2, 1.6, '#a4927a', { blend: true }), PX([[34, 14]], '#2a2220'),
+    E(27.5, 9, 1.6, 1, '#8c7b66', { rot: -.5 }),
+    LN([[29, 9], [28, 5], [26, 2], [24, 1]], '#d8c8a8'), LN([[28, 5], [30, 3]], '#d8c8a8'), LN([[26, 2], [27, 0]], '#d8c8a8'), LN([[30, 9], [31, 5], [33, 2]], '#c4b494'), LN([[31, 5], [33, 5]], '#c4b494'), sleepEye(30, 11, sl)], hx, hy) });
+
+SPR.walrus = { w: 48, h: 30, ay: 28, n: 4, draw(st, ph) {
+  const sl = st === 'sleep', hb = sl ? 2 : (step(ph, 4) % 2 ? 0 : -1), c = '#a8705a';
+  return [E(6, 24, 4.2, 2.4, '#8a5a48', { rot: .4 }), E(21, 18, 16, 9, c, { pat: pat.spots('#c4887a', .12, 2, 3) }), E(18, 24, 12, 2.4, '#94604c', { blend: true, noCrease: true }),
+    E(31, 25, 4.2, 2, '#8a5a48', { rot: .3 }),
+    ...sh([E(35, 13, 7, 6.6, c, { pat: pat.spots('#c4887a', .1, 2, 5) }), E(40, 16, 4.2, 3.5, '#c79a84', { blend: true }), PX([[39, 15], [41, 15], [40, 17], [42, 16], [43, 17]], '#f0d8c8'),
+      C(38, 19, 39, 27, 1.1, .7, '#f2ead8', { shiny: true }), C(41, 19, 42, 27, 1.1, .7, '#f2ead8', { shiny: true }), sleepEye(37, 10, sl)], 0, hb)];
+} };
+
+SPR.ringedseal = fish({ w: 36, h: 16, ay: 13, wag: 1.2, parts: (sl, ph, w) => [
+  Pg([[5, 8], [0, 4 + w], [2, 8], [0, 12 + w], [5, 10]], '#6e747c'),
+  E(17, 8.5, 14, 4.6, '#8a9098', { pat: pat.rings('#c6ccd2', 4) }), E(17, 11, 11, 1.8, '#b4bac0', { blend: true, noCrease: true }),
+  E(29.5, 7.5, 4.3, 3.6, '#8a9098'), E(32.6, 8.6, 2, 1.6, '#9aa0a8', { blend: true }), PX([[34, 8]], '#1a1a20'), PX([[33, 10], [34, 9], [35, 10]], '#d8dce0'),
+  E(23, 11.5, 2.6, 1.2, '#6e747c', { rot: .6 }), sleepEye(30, 6, sl, { size: 2 })] });
+
+SPR.ptarmigan = { w: 18, h: 18, ay: 16, n: 2, draw(st, ph) { const sl = st === 'sleep';
+  const mott = (x, y) => y < 8 && hash(x, y, 9) < .35 ? '#9a7a5a' : null;
+  return [E(8, 10, 5.6, 4.6, '#f2f0ea', { pat: mott }), E(4, 9, 2.2, 2.4, '#f2f0ea', { rot: .5 }),
+    ...(sl ? [E(10, 8, 2.8, 2.6, '#f2f0ea', { pat: mott }), EYE(11, 7, { closed: true })] :
+      [E(12, 6 + (step(ph, 2) ? 1 : 0), 2.8, 2.6, '#f2f0ea', { pat: mott }), PX([[14, 6 + (step(ph, 2) ? 1 : 0)]], '#1a1820'), PX([[12, 4 + (step(ph, 2) ? 1 : 0)]], '#d8443a'), EYE(12, 5 + (step(ph, 2) ? 1 : 0))]),
+    E(7, 15, 1.6, 1, '#e6e2d8'), E(10, 15, 1.6, 1, '#e6e2d8')];
+} };
+
+SPR.tern = { w: 28, h: 18, n: 4, draw(st, ph) { const sl = st === 'sleep';
+  if (sl) return [E(12, 11, 5.5, 2.4, '#f4f4f6'), C(8, 10, 3, 9, 1.2, .5, '#e0e2e8'), C(10, 10, 16, 10, 1.6, 1, '#c9ced8'), E(17, 9, 2.4, 2, '#f4f4f6'), E(17.3, 7.9, 2.3, 1.2, '#18161c'), C(19, 9, 22, 10, .8, .4, '#d8302a'), PX([[11, 13], [13, 13], [11, 14], [13, 14]], '#d8302a')];
+  const f = S2(ph) * 6;
+  const wing = dim => C(14, 8, 9, 8 - f, 2.2, .7, '#c9ced8', { dim });
+  return [wing(1), LN([[8, 9], [2, 6]], '#e8e8ec'), LN([[8, 10], [2, 12]], '#e8e8ec'), E(13, 9, 5, 2, '#f4f4f6'), E(18, 8, 2.4, 2, '#f4f4f6'), E(18.4, 6.9, 2.3, 1.2, '#18161c'), C(20, 8, 24, 9, .8, .4, '#d8302a'), wing(0)];
+} };
+
+SPR.littleauk = { w: 18, h: 14, ay: 11, n: 2, draw(st, ph) { const sl = st === 'sleep', b = sl ? 0 : step(ph, 2);
+  return [E(8, 8 + b, 6, 3.4, '#1c1a24'), E(8, 10 + b, 5, 1.6, '#f2f2f4', { blend: true }), E(13, 5 + b, 2.8, 2.6, '#1c1a24'), PX([[16, 6 + b]], '#2a2830'), sleepEye(14, 4 + b, sl, { pupil: '#3a3844' }), PX([[14, 3 + b]], '#f2f2f4')];
+} };
+
+/* ---------- REEF ---------- */
+SPR.clownfish = fish({ w: 20, h: 12, wag: 1.4, parts: (sl, ph, w) => {
+  const band = (x) => (x >= 5 && x < 6.5) || (x >= 10 && x < 11.5) ? '#f6f6f2' : (x >= 4.3 && x < 5) || (x >= 6.5 && x < 7.2) || (x >= 9.3 && x < 10) || (x >= 11.5 && x < 12.2) ? '#1a1418' : null;
+  return [Pg([[4, 6], [0, 2 + w], [1, 6], [0, 10 + w]], '#f07a18', { pat: (x) => x < 1 ? '#1a1418' : null }), E(10, 2.4, 4, 1.6, '#f07a18', { pat: (x, y) => y < 1.6 ? '#1a1418' : null }),
+    E(10, 6, 7, 3.7, '#f07a18', { shiny: true, pat: band }), E(11, 8.6, 1.6, 1.2, '#f07a18', { pat: (x, y) => y > 9 ? '#1a1418' : null }), EYE(14, 4, { size: 2, iris: '#e86a10' }), PX([[17, 6]], '#c85a10')];
+} });
+
+SPR.parrotfish = fish({ w: 28, h: 16, wag: 1.6, parts: (sl, ph, w) => {
+  const scl = (x, y) => (y % 2 === 0 && (x + (y % 4 ? 2 : 0)) % 4 === 0) ? '#e889b8' : null;
+  return [Pg([[5, 8], [0, 2 + w], [2, 8], [0, 14 + w]], '#2fa3b8', { pat: (x, y) => x < 1.5 ? '#e889b8' : null }), E(14, 3, 7, 1.7, '#e889b8'),
+    E(14, 8, 9.5, 5, '#2fb4a0', { shiny: true, pat: scl }), E(14, 12.3, 3, 1.4, '#e889b8'), E(23, 9, 2.1, 1.9, '#e9e4c8', { shiny: true }), PX([[24, 9], [23, 9]], '#9a9478'),
+    LN([[20, 5], [22, 4]], '#f0a0c8'), EYE(20, 6, { size: 2, iris: '#f2c230' }), E(17, 9, 2, 1.2, '#38c8b0', { rot: .5 })];
+} });
+
+SPR.turtle = fish({ w: 40, h: 22, wag: 0, parts: (sl, ph) => {
+  const fl = sl ? 0 : S2(ph) * 3, scale = pat.patches('#5a4e2e', 2.5, 4);
+  return [C(25, 11, 28 - fl * .3, 17 + fl * .4, 2.2, 1.2, '#9a8e5a', { dim: 1, pat: scale }), E(7, 13, 3.2, 1.6, '#9a8e5a', { rot: .4, pat: scale }),
+    E(18, 10, 11.5, 6.2, '#6c6a36', { shiny: true, pat: pat.patches('#3a3420', 5, 2) }), E(18, 15, 9, 1.4, '#c8b47a', { blend: true, noCrease: true, max: 2 }),
+    C(29, 10, 31, 10, 2.6, 2.4, '#9a8e5a', { pat: scale }), E(33, 10, 3.5, 2.8, '#9a8e5a', { pat: scale }), PX([[36, 11], [36, 10]], '#4a4428'), sleepEye(34, 9, sl),
+    C(25, 12, 30 + fl * .4, 18 + fl, 2.6, 1.3, '#9a8e5a', { pat: scale })];
+} });
+
+SPR.manta = { w: 54, h: 24, n: 4, draw(st, ph) { const f = S2(ph) * 4, c = '#2c3440';
+  const wing = (s) => { const tx = s < 0 ? 2 : 52; return Pg([[27 + s * 4, 8], [tx, 4 + f], [tx + (s < 0 ? 3 : -3), 7 + f], [27 + s * 6, 14]], c, { pat: (x, y) => y > 10 + f * .3 && Math.abs(x - 27) > 8 ? '#e8ecf0' : (Math.abs(x - 27) > 6 && Math.abs(x - 27) < 11 && y < 9) ? '#c8ccd2' : null }); };
+  return [wing(-1), wing(1), E(27, 10, 8, 4.6, c, { shiny: true }), LN([[27, 14], [27, 17], [28, 23]], '#1e242e'), C(22, 12, 19, 16, 1.4, .8, c), C(32, 12, 35, 16, 1.4, .8, c), EYE(21, 9), EYE(33, 9)];
+} };
+
+SPR.whitetip = fish({ w: 48, h: 18, wag: 1.8, parts: (sl, ph, w) => [
+  Pg([[9, 9], [1, 1 + w], [4, 9], [2, 15 + w]], '#8a96a6', { pat: (x, y) => y < 3 + w ? '#f4f6f8' : null }),
+  C(8, 9, 30, 9, 1.8, 4.4, '#8a96a6', { shiny: true }), E(35, 9.2, 7, 3.8, '#8a96a6', { blend: true, shiny: true }), E(26, 11.6, 11, 1.8, '#e8ecf0', { blend: true, noCrease: true, clip: (x, y) => y > 10 }),
+  Pg([[20, 6], [25, 0], [27, 6]], '#8a96a6', { pat: (x, y) => y < 2 ? '#f4f6f8' : null }), Pg([[27, 11], [23, 16], [30, 12]], '#7a8696'),
+  LN([[31, 8], [31, 10]], '#5a6676'), LN([[33, 8], [33, 10]], '#5a6676'), EYE(37, 8), PX([[41, 10], [40, 11]], '#5a6676')] });
+
+SPR.moray = { w: 46, h: 16, n: 4, draw(st, ph) { const sl = st === 'sleep', c = '#7a7a3a', sp = pat.spots('#3a3a1c', .22, 1.5, 7);
+  const P = []; const from = sl ? 24 : 3; let px0 = null;
+  for (let x = from; x <= 34; x += 2) { const y = 9 + Math.sin(x * .25 + ph * TAU) * (sl ? 0 : 2), r = 1.4 + (x - 3) / 31 * 1.8; if (px0) P.push(C(px0[0], px0[1], x, y, px0[2], r, c, { blend: true, pat: sp })); px0 = [x, y, r]; }
+  const hy = px0[1] - 1;
+  P.push(E(38, hy, 5, 3.4, c, { pat: sp }), PX([[40, hy + 2], [41, hy + 2], [42, hy + 2], [43, hy + 1]], '#2a1e18'), PX([[41, hy + 3], [43, hy + 2]], '#efe6d0'), EYE(39, hy - 2, { iris: '#e8d040' }));
+  return P;
+} };
+
+SPR.polyps = { w: 28, h: 22, ay: 21, n: 2, draw(st, ph) { const sl = st === 'sleep', c = '#c86a9a';
+  const br = [[14, 21, 14, 11, 2.4, 1.7], [14, 14, 7, 7, 1.7, 1.2], [14, 12, 21, 5, 1.6, 1.1], [8, 9, 5, 2, 1.3, 1], [19, 7, 23, 2, 1.3, 1], [14, 11, 14, 2, 1.5, 1.1], [14, 16, 24, 12, 1.5, 1], [7, 7, 3, 9, 1.1, .9]];
+  const P = br.map(b => C(...b, c, { blend: true, pat: sl ? pat.spots('#8a3a6a', .16, 1, 3) : pat.spots('#f8d0e6', .3, 1, 3 + step(ph, 2)) }));
+  if (!sl) { const tips = [[5, 2], [23, 2], [14, 2], [24, 12], [3, 9], [21, 5], [7, 7]]; const k = step(ph, 2);
+    for (const [x, y] of tips) P.push(PX([[x - 1, y - 1 - k], [x + 1, y - 1], [x, y - 2 + k], [x - 2, y + k], [x + 2, y - k]], '#fbe6f2')); }
+  return P;
+} };
+
+SPR.crayfish = { w: 32, h: 16, ay: 14, n: 4, draw(st, ph) { const k = step(ph, 4);
+  const legs = []; for (let i = 0; i < 4; i++) { const x = 15 + i * 2.4, o = ((k + i) % 2); legs.push(LN([[x, 11], [x - 1 + o, 14]], i % 2 ? '#e8d8b0' : '#d07a3a')); }
+  return [...legs, Pg([[6, 10], [0, 7], [1, 10], [0, 13]], '#2f6aa0'), C(5, 10, 13, 9.6, 2.4, 3.1, '#2f6aa0', { pat: pat.stripes('#e8eef2', 3, .8, 0) }),
+    E(19, 9, 6, 3.7, '#3a7ab0', { shiny: true, pat: pat.spots('#e8f0f0', .16, 1, 2) }), E(25, 8, 2.4, 2.4, '#5a9a70'),
+    C(26, 7, 30, 2, 1, .5, '#d8cfc0'), LN([[30, 2], [31, 0]], '#d8cfc0'), C(26, 9, 31, 7, .8, .4, '#c8bfb0'), PX([[26, 6]], '#1a1418')];
+} };
+
+/* ---------- RAINFOREST ---------- */
+SPR.jaguar = quad({ w: 46, h: 28, ay: 25, c: '#d79b3f', layHead: [1, 3], layDrop: 6,
+  legs: { back: 12, front: 30, top: 15, len: 9, r1: 3, rk: 2.3, r2: 1.9, swing: 2.3, lift: 1.4, foot: '#e0b070', fr: 2 }, legPat: pat.spots('#2a1c12', .18, 1, 5),
+  body: () => [E(21, 12.5, 12, 5.9, '#d79b3f', { pat: pat.rosette('#2a1c12', '#b5701f', 5) }), E(30, 13, 4.8, 5.3, '#d79b3f', { blend: true, pat: pat.rosette('#2a1c12', '#b5701f', 5) }), E(21, 16.8, 8, 1.6, '#ecd2a0', { blend: true, noCrease: true, max: 2 })],
+  tail: (sl, ph) => { const s = sl ? 0 : S2(ph) * 1.2; return [C(9, 11, 4, 14, 1.4, 1.1, '#d79b3f', { pat: pat.spots('#2a1c12', .2, 1, 6) }), C(4, 14, 3 + s, 21, 1.1, 1, '#d79b3f', { blend: true, pat: pat.spots('#2a1c12', .25, 1, 6) })]; },
+  head: (sl, ph, hx, hy) => sh([C(31, 11, 35, 10, 3.6, 3.3, '#d79b3f', { blend: true }), E(37, 10, 4.5, 3.9, '#d79b3f', { pat: pat.spots('#2a1c12', .14, 1, 8) }), E(40, 11.6, 2.3, 1.9, '#efd6a6', { blend: true }),
+    E(34.6, 6, 1.4, 1.4, '#7a5126'), PX([[42, 10], [42, 11]], '#3a2420'), sleepEye(38, 9, sl)], hx, hy) });
+
+SPR.sloth = { w: 28, h: 24, ax: 14, ay: 0, top: true, n: 4, draw(st, ph) { const sl = st === 'sleep', c = '#8c7a62', alg = pat.spots('#7a8a5a', .2, 2, 4), k = sl ? 0 : step(ph, 4);
+  const a1 = k === 1 ? 1 : 0, a2 = k === 3 ? 1 : 0;
+  return [C(7 + a1, 1, 9, 9, 1.7, 1.9, c, { pat: alg }), C(21 - a2, 1, 18, 9, 1.7, 1.9, c, { dim: 1, pat: alg }),
+    C(10, 12, 9, 1, 1.8, 1.6, c, { dim: 1, pat: alg }), C(17, 12, 19, 1, 1.8, 1.6, c, { pat: alg }),
+    E(14, 12, 8, 6, c, { pat: alg }),
+    ...(sl ? [E(15, 16, 4, 3.4, c, { pat: alg })] : [E(20, 14, 4.2, 3.7, '#c8b89a'), E(20.5, 15.5, 2.4, 1.6, '#d8cab0', { blend: true }), LN([[17, 13], [19, 13]], '#3a2a20'), LN([[21, 13], [23, 13]], '#3a2a20'), EYE(18, 13), EYE(22, 13), PX([[20, 15]], '#2a1e18'), PX([[19, 16], [21, 16]], '#6a5a48')]),
+    PX([[6 + a1, 0], [7 + a1, 0], [5 + a1, 1], [20 - a2, 0], [21 - a2, 0], [22 - a2, 1], [8, 0], [9, 0], [19, 0], [18, 0]], '#2e2620')];
+} };
+
+SPR.macaw = { w: 36, h: 32, ay: 16, n: 4, draw(st, ph) { const sl = st === 'sleep';
+  if (sl) return [C(16, 15, 13, 29, 2, 1, '#d8301e', { pat: (x, y) => y > 22 ? '#2a6fd0' : null }), E(18, 10, 4, 6, '#d8301e', { rot: .25 }), E(17, 11, 3.2, 5, '#d8301e', { rot: .3, pat: (x, y) => y < 10 ? '#f2c12e' : y < 14 ? '#2a6fd0' : null }),
+    E(19, 5, 3.2, 3, '#d8301e'), E(20.5, 5.4, 1.6, 1.6, '#f2ece6', { blend: true }), E(22.4, 6, 1.6, 2, '#efe4d0', { shiny: true }), PX([[22, 8]], '#2a2420'), EYE(20, 4.5, { closed: true }), PX([[17, 16], [19, 16]], '#6a6060')];
+  const f = S2(ph) * 7;
+  const wing = dim => Pg([[14, 13], [21, 13], [12, 13 - f], [9, 14 - f * .8]], '#d8301e', { dim, pat: (x, y) => { const d = Math.hypot(x - 17, y - 13); return d > 7 ? '#2a6fd0' : d > 4.5 ? '#f2c12e' : null; } });
+  return [wing(1), C(13, 15, 1, 19, 1.6, .6, '#d8301e', { pat: (x) => x < 7 ? '#2a6fd0' : null }), E(18, 14, 6, 2.6, '#d8301e', { shiny: true }), E(25, 12.5, 2.8, 2.6, '#d8301e'), E(26, 12.6, 1.4, 1.4, '#f2ece6', { blend: true }), E(28.5, 13.5, 1.5, 1.6, '#efe4d0', { shiny: true }), EYE(25.6, 12), wing(0)];
+} };
+
+SPR.toucan = { w: 26, h: 24, ay: 13, n: 2, draw(st, ph) { const sl = st === 'sleep', t = sl ? 0 : step(ph, 2);
+  const body = [C(5, 15, 4, 22, 1.7, 1.2, '#18161e'), E(6, 10, 3.8, 5.6, '#18161e', { rot: .15 }), PX([[6, 15], [7, 15]], '#d8342a'), PX([[6, 13], [8, 13]], '#5a5a60')];
+  if (sl) return [...body, E(8, 7, 3.6, 3.2, '#18161e'), C(8, 5, 1, 9, 2.4, 1.1, '#18161e', { pat: (x, y) => y < 6 ? '#e8c43a' : null }), EYE(9, 6, { closed: true })];
+  return [...body, E(8, 7, 2.6, 2.6, '#f4f0e4'), E(7, 4, 3, 2.8, '#18161e'), C(9, 4.5 - t * .5, 21, 6.5 - t, 2.6, 1.1, '#18161e', { shiny: true, pat: (x, y) => y < 4.6 - t * .5 ? '#e8c43a' : null }), E(10, 4.5, 1.2, 2.5, '#e8c43a'), EYE(8, 3, { ring: '#3a8ad8' })];
+} };
+
+SPR.howler = { w: 24, h: 28, ay: 19, n: 4, draw(st, ph) { const sl = st === 'sleep', fur = pat.stripes('#c8662e', 3, 1, .6, .5), k = step(ph, 4), howl = !sl && (k === 1 || k === 2);
+  const P = [C(6, 15, 4, 22, 1.3, 1, '#9c3e1e'), C(4, 22, 6, 26, 1, .9, '#9c3e1e'), E(11, 11, 5.6, 6.6, '#a8441e', { pat: fur }), C(9, 15, 13, 18, 2.2, 1.6, '#9c3e1e'), C(14, 10, 17, 18, 1.6, 1.2, '#9c3e1e')];
+  if (sl) return [...P, E(14, 9, 3.6, 3.2, '#8a321a'), EYE(15, 8, { closed: true })];
+  return [...P, E(15, 6, 3.7, 3.4, '#8a321a'), E(17, 7.2, 2, 2.4, '#2a1a14', { blend: true }), E(16, 10 + (howl ? 1 : 0), 2.6, 2 + (howl ? 1 : 0), '#8a321a'), EYE(17, 6, { iris: '#e0a030' }), howl ? PX([[18, 9], [18, 10]], '#120a08') : PX([[18, 9]], '#3a2018')];
+} };
+
+SPR.dartfrog = { w: 13, h: 9, ay: 8, n: 2, draw(st, ph) { const k = st === 'sleep' ? 0 : step(ph, 2), str = pat.stripes('#f0d020', 2.6, 1, Math.PI / 2, .6);
+  return [E(3, 6.5, 2.2 + k, 1.2, '#3a7ad8', { shiny: true, pat: pat.spots('#141218', .2, 1, 2) }), E(6, 4.6, 4.2, 2.6, '#1a1820', { shiny: true, pat: str }), E(9.6, 3.8, 2.2, 1.8, '#1a1820', { shiny: true, pat: str }),
+    E(9, 6.6, 1.2, 1, '#3a7ad8', { shiny: true }), E(10.4, 2.6, 1, 1, '#1a1820', { shiny: true })];
+} };
+
+SPR.milkfrog = { w: 17, h: 12, ay: 11, n: 2, draw(st, ph) { const sl = st === 'sleep', k = sl ? 0 : step(ph, 2), band = pat.stripes('#6a4a30', 3.2, 1.4, Math.PI / 2, .8);
+  return [E(4, 8.5 - k * .5, 2.8 + k * .6, 1.6, '#b8a890', { pat: band }), E(8, 6.5, 6, 3.4, '#cfc3ae', { shiny: true, pat: band }), E(12.6, 5.2, 2.8, 2.4, '#cfc3ae', { shiny: true }), E(12, 8.8, 1.5, 1.2, '#b8a890'),
+    sl ? EYE(13, 3.8, { closed: true }) : EYE(12.6, 3, { size: 2, iris: '#d8b040' })];
+} };
+
+SPR.nightmonkey = { w: 20, h: 26, ay: 17, n: 2, draw(st, ph) { const sl = st === 'sleep', c = '#8a8478';
+  const P = [C(5, 14, 3, 24, 1.2, 1.4, '#6a6458', { pat: (x, y) => y > 21 ? '#1e1c1a' : null }), E(8, 10, 4.7, 5.7, c, { pat: pat.spots('#a49c8c', .15, 1, 2) }), E(9.6, 12, 2.4, 3.6, '#d8a060', { blend: true }), C(9, 14, 12, 16.5, 2, 1.5, c)];
+  if (sl) return [...P, E(10, 7, 3.4, 3.2, c), EYE(11, 7, { closed: true })];
+  const b = step(ph, 2);
+  return [...P, E(11, 4.6 + b * .5, 3.7, 3.4, c), E(12.4, 5 + b * .5, 2.4, 2.3, '#d8d0bc', { blend: true }), LN([[10, 2 + b], [14, 2 + b]], '#1e1c1a'), EYE(12, 4 + b, { size: 2, iris: '#e8a030' }), PX([[15, 6 + b]], '#2a2420')];
+} };
+
+SPR.morpho = { w: 20, h: 16, n: 4, draw(st, ph) { const sl = st === 'sleep', k = sl ? 2 : step(ph, 4);
+  const edge = (x, y, n) => Math.hypot(n[0], n[1]) > .78 ? '#14141c' : null;
+  const body = C(10, 4, 10, 12, .8, .6, '#2a2420');
+  if (k === 2) return [Pg([[10, 10], [4, 2], [11, 1]], '#8a6a40', { pat: (x, y) => Math.hypot(x - 7.5, y - 4.5) < 1.6 ? (Math.hypot(x - 7.5, y - 4.5) < .8 ? '#1a1418' : '#e8c050') : null }), body, LN([[10, 4], [12, 1]], '#2a2420')];
+  const s = k === 0 ? 1 : .55;
+  return [E(10 - 4 * s, 6, 5 * s, 4, '#2a8ae8', { shiny: true, pat: edge }), E(10 + 4 * s, 6, 5 * s, 4, '#2a8ae8', { shiny: true, pat: edge }), E(10 - 3 * s, 10.5, 3.6 * s, 3, '#2272d0', { shiny: true, pat: edge }), E(10 + 3 * s, 10.5, 3.6 * s, 3, '#2272d0', { shiny: true, pat: edge }),
+    body, LN([[10, 4], [8, 0]], '#2a2420'), LN([[10, 4], [12, 0]], '#2a2420')];
+} };
+
+/* ---------- DEEP SEA ---------- */
+SPR.lanternfish = fish({ w: 15, h: 9, wag: 1, parts: (sl, ph, w) => [Pg([[3, 4.5], [0, 1 + w], [0, 8 + w]], '#2e3c58'), E(7.5, 4.5, 5.6, 2.5, '#3a4a68', { shiny: true }), EYE(10, 3, { size: 2 }),
+  PX([[4, 6], [6, 6], [8, 6], [10, 6], [12, 5]], '#7fe8ff', { glow: true })] });
+
+SPR.humboldt = { w: 42, h: 16, n: 4, draw(st, ph) { const k = step(ph, 4), flash = k === 2, c = flash ? '#ead6cc' : '#c8402e';
+  const arms = []; for (let i = 0; i < 5; i++) { const by = 6 + i, wv = Math.sin(ph * TAU + i) * 1.5; arms.push(LN([[27, by], [33, by + (i - 2) * .6 + wv * .5], [40, by + (i - 2) * 1.2 + wv]], flash ? '#f2e2d8' : '#d85a44')); }
+  return [...arms, Pg([[3, 8], [6, 3], [9, 8], [6, 13]], c), C(4, 8, 22, 8, 2.5, 4.2, c, { shiny: true, pat: pat.spots(flash ? '#c8402e' : '#8a2018', .25, 1, 3 + k) }), E(25, 8, 3, 3.3, c), EYE(24.5, 6.5, { size: 2, iris: '#e8e0c0' })];
+} };
+
+SPR.krill = { w: 10, h: 6, n: 2, draw(st, ph) { const k = step(ph, 2);
+  return [LN([[3, 4], [2, 5 + k]], '#f0b0b0'), LN([[5, 4], [5 - k, 5]], '#f0b0b0'), C(1, 2.5, 7, 2.5, .8, 1.3, '#e88a8a', { shiny: true }), PX([[8, 2]], '#1a1010'), PX([[9, 1], [9, 3]], '#f0b0b0'), PX([[4, 3]], '#8ad8ff', { glow: true })];
+} };
+
+SPR.angler = { w: 28, h: 24, ay: 22, n: 2, draw(st, ph) { const k = step(ph, 2);
+  return [Pg([[4, 13], [0, 8], [0, 18]], '#2a2632'), E(12, 14, 9, 7.6, '#2a2632', { pat: pat.spots('#3a3444', .2, 1, 2) }), E(10, 19, 3, 1.4, '#3a3444'),
+    Pg([[14, 15], [22, 12], [22, 19]], '#120e14', { flat: true }), PX([[16, 14], [18, 13], [20, 12], [17, 18], [19, 18], [21, 18]], '#f0ece0'),
+    EYE(15, 10, { iris: '#c8d8e8' }), LN([[13, 7], [15, 2], [20, 1], [22, 3 + k]], '#5a5060'), E(22, 4.5 + k, 1.5, 1.5, '#e8f070', { glow: true, shiny: true })];
+} };
+
+SPR.barreleye = { w: 22, h: 14, n: 2, draw(st, ph) { const k = step(ph, 2);
+  return [Pg([[4, 9], [0, 6], [0, 12]], '#3a3640'), Pg([[9, 10], [4, 14 - k], [11, 11]], '#5a5664'), E(10, 9, 7, 3.6, '#3a3640', { shiny: true }), LN([[11, 6], [13, 3], [17, 2], [20, 4], [20, 7]], '#9ad8e0'),
+    E(15.5, 4.6, 1.3, 2, '#58e070', { shiny: true, glow: true }), PX([[18, 9], [17, 10]], '#1a1820')];
+} };
+
+SPR.vampsquid = { w: 28, h: 20, n: 2, draw(st, ph) { const k = step(ph, 2), o = k ? 2 : 0;
+  return [E(6, 3, 2.2, 1.4, '#7a1f3a'), Pg([[14, 7], [26, 3 - o], [25, 17 + o], [14, 13]], '#5a1428', { pat: pat.stripes('#3a0a18', 3, .8, 1.3) }), E(10, 8, 6, 5.6, '#7a1f3a', { shiny: true }),
+    EYE(12, 7, { size: 2, iris: '#5ab0ff' }), PX([[26, 3 - o], [25, 17 + o], [26, 10]], '#7fe8ff', { glow: true })];
+} };
+
+SPR.larvacean = { w: 34, h: 30, n: 2, alpha: .75, draw(st, ph) { const k = step(ph, 2), P = [];
+  for (let r = 0; r < 3; r++) { const rx = 15 - r * 4, ry = 13 - r * 3.4, pts = []; for (let a = 0; a <= 16; a++) { const t = a / 16 * TAU; pts.push([17 + Math.cos(t) * rx, 15 + Math.sin(t) * ry]); } P.push(LN(pts, r === 0 ? '#5a8ea0' : '#86c0d0')); }
+  P.push(E(17, 15, 4, 3, '#cfe8f0', { shiny: true }), E(17, 15, 2, 1.4, '#f0a0b8'), LN([[15, 15], [13, 14 + k], [11, 16 - k]], '#f0a0b8'));
+  return P;
+} };
+
+const FRAMES = {};
+function frame(key, st, f) { const d = SPR[key]; const n = st === 'sleep' ? 2 : d.n; f = ((f % n) + n) % n; const k = key + '|' + st + '|' + f; if (FRAMES[k]) return FRAMES[k]; return FRAMES[k] = raster(d.w, d.h, d.draw(st, f / n), d.opt); }
+/* ================= More creatures: London, Antarctica, Sahara + seasonal coats ================= */
+function foxLike(o) { const oy = o.oy || 0, es = o.ears || 1;
+  return quad({ w: 36, h: 26 + oy, ay: 23 + oy, c: o.c, curl: true, layDrop: 3, layHead: [-1, 3],
+    legs: { back: 11, front: 23, top: 15 + oy, len: 7, r1: 1.9, rk: 1.4, r2: 1.1, swing: 2.1, lift: 1.3, c: o.legC, foot: o.legC, fr: 1.3 },
+    body: () => sh([E(17, 12, 8.4, 4.5, o.c), E(18, 15, 6, 1.6, o.belly, { blend: true, noCrease: true, max: 2 })], 0, oy),
+    tail: (sl, ph) => sh(sl ? [E(18, 15, 9.5, 3, o.c, { pat: (x) => x > 25 ? o.tip : null })] : [C(10, 11, 2, 9 + S2(ph) * .9, 2.6, 3.2, o.tailC || o.c, { pat: (x) => x < 3.5 ? o.tip : null })], 0, oy),
+    head: (sl, ph, hx, hy) => sh([C(23, 11, 27, 9, 3.2, 2.6, o.c, { blend: true }), E(27.5, 9, 3.1, 2.7, o.c), C(29, 10, 33, 10.6, 1.7, .9, o.c, { blend: true }), E(29.5, 11.4, 2.2, 1.1, o.belly, { blend: true }),
+      PX([[33, 10]], '#1a1214'), Pg([[25, 7], [25.4, 7 - 4.2 * es], [28.2, 6.2]], o.earC, { pat: (x, y) => es > 1 && x > 25.8 && x < 27.2 && y < 5 ? '#f0b8a8' : null }), sleepEye(28, 8, sl)], hx, hy + oy) });
+}
+SPR.redfox = foxLike({ c: '#c8642a', belly: '#f2ece0', legC: '#2a1e1a', tip: '#f4f0e8', earC: '#a84a22' });
+SPR.arcticfox_s = foxLike({ c: '#6e5e4e', belly: '#d8ccb4', legC: '#5a4a3c', tip: '#8a7a68', earC: '#5a4a3c' });
+SPR.fennec = foxLike({ c: '#e6cc98', belly: '#f8f0dc', legC: '#d8b880', tip: '#2a2018', earC: '#e6cc98', ears: 2, oy: 4 });
+
+SPR.ptarmigan_s = { w: 18, h: 18, ay: 16, n: 2, draw(st, ph) { const sl = st === 'sleep', k = sl ? 0 : step(ph, 2);
+  const mott = (x, y) => hash(x, y, 9) < .4 ? '#5a4028' : hash(x, y, 3) < .3 ? '#b89a6a' : null;
+  return [E(8, 10, 5.6, 4.6, '#8a6a48', { pat: mott }), E(4, 9, 2.2, 2.4, '#6a5038', { rot: .5 }), E(8, 13, 4, 1.4, '#f2f0ea', { blend: true }),
+    ...(sl ? [E(10, 8, 2.8, 2.6, '#8a6a48', { pat: mott }), EYE(11, 7, { closed: true })] : [E(12, 6 + k, 2.8, 2.6, '#8a6a48', { pat: mott }), PX([[14, 6 + k]], '#1a1820'), PX([[12, 4 + k]], '#d8443a'), EYE(12, 5 + k)]),
+    E(7, 15, 1.6, 1, '#e6e2d8'), E(10, 15, 1.6, 1, '#e6e2d8')]; } };
+
+/* ---------- LONDON ---------- */
+SPR.hedgehog = { w: 20, h: 13, ay: 12, n: 4, draw(st, ph) { const sl = st === 'sleep', sp = (x, y) => hash(x, y, 3) < .42 ? '#dccca8' : hash(x, y, 5) < .3 ? '#3a2a1e' : null;
+  if (sl) return [E(9, 7.5, 6.4, 4.6, '#7a6048', { pat: sp })];
+  const k = step(ph, 4);
+  return [PX([[5 + k % 2, 11], [6 + k % 2, 11], [11 - k % 2, 11], [12 - k % 2, 11]], '#5a4434'), E(8.5, 7, 6.4, 4.4, '#7a6048', { pat: sp }), E(14, 8.6, 2.9, 2.1, '#c8a888'), C(14.5, 9, 18, 9.6, 1.1, .6, '#c8a888', { blend: true }),
+    PX([[18, 9]], '#1a1214'), PX([[12, 6]], '#a88868'), EYE(15, 8)]; } };
+SPR.pipistrelle = { w: 20, h: 12, n: 4, draw(st, ph) { const f = S2(ph) * 4;
+  const wing = s => { const q = v => 10 + s * v; return Pg([[q(1), 5], [q(9), 2 - f], [q(8), 5 - f * .5], [q(9), 8 - f * .2], [q(6), 7], [q(3), 8], [q(1), 7]], '#3e2c24', { pat: (x, y) => (Math.abs(x - 10) === 5 || Math.abs(x - 10) === 7) && y > 3 ? '#5e4434' : null }); };
+  return [wing(-1), wing(1), E(10, 5.6, 2.2, 2.2, '#6a4a34'), E(10, 3.4, 1.7, 1.5, '#6a4a34'), PX([[9, 1], [11, 1]], '#4a3428'), PX([[9, 3], [11, 3]], '#14100e')]; } };
+SPR.pigeon = { w: 22, h: 17, ay: 16, n: 4, draw(st, ph) { const sl = st === 'sleep', k = sl ? 0 : step(ph, 4), hx = [0, 1, 2, 1][k];
+  const P = [C(5, 10, 1, 11, 2, 1.5, '#7a8096', { pat: (x) => x < 2.5 ? '#2a2c38' : null }), E(10, 10, 6.2, 3.9, '#9298ac'), E(9, 9.5, 4.6, 2.8, '#a8aec0', { pat: (x, y) => (x === 7 || x === 10) && y > 9 ? '#2a2c38' : null }),
+    PX([[9 + k % 2, 14], [12 - k % 2, 14], [9 + k % 2, 15], [12 - k % 2, 15]], '#d87a7a')];
+  if (sl) return [...P, E(14, 7.6, 2.8, 2.6, '#6a8a8a', { pat: (x, y) => (x + y) % 3 === 0 ? '#8a6a9a' : null }), E(14.5, 6, 2.2, 2, '#7a8094'), EYE(15, 5, { closed: true })];
+  return [...P, E(14, 7, 2.6, 2.8, '#6a8a8a', { pat: (x, y) => (x + y) % 3 === 0 ? '#8a6a9a' : null }), E(15.5 + hx * .5, 4.6, 2.2, 2, '#7a8094'), PX([[17 + Math.round(hx * .5), 5], [18 + Math.round(hx * .5), 5]], '#2a2a30'), PX([[17 + Math.round(hx * .5), 4]], '#e8e4e0'), EYE(16 + Math.round(hx * .5), 4, { iris: '#e86a20' })]; } };
+SPR.robin = { w: 15, h: 14, ay: 13, n: 2, draw(st, ph) { const sl = st === 'sleep', sing = !sl && step(ph, 2) === 1;
+  const P = [C(4, 8, 0, 6, 1.3, .8, '#7a5a3a'), E(6.5, 8, sl ? 5 : 4.4, sl ? 4 : 3.6, '#8a6a48'), E(8.5, 8.6, 2.8, 2.8, '#e0602a', { blend: true }), PX([[6, 12], [8, 12], [6, 13], [8, 13]], '#5a4a3a')];
+  if (sl) return [...P, E(9, 6, 2.6, 2.4, '#8a6a48'), E(10, 6.6, 1.6, 1.6, '#e0602a', { blend: true }), EYE(10, 5, { closed: true })];
+  return [...P, E(9.5, 5, 2.6, 2.4, '#8a6a48'), E(10.6, 5.6, 1.6, 1.6, '#e0602a', { blend: true }), sing ? PX([[13, 4], [13, 6]], '#2a2018') : PX([[13, 5]], '#2a2018'), EYE(10, 4)]; } };
+SPR.tawnyowl = { w: 20, h: 24, ay: 22, n: 2, draw(st, ph) { const sl = st === 'sleep', k = sl ? 0 : step(ph, 2), st2 = (x, y) => hash(x, y, 8) < .18 ? '#4a2e1a' : hash(x, y, 9) < .12 ? '#c89a68' : null;
+  return [E(10, 14, 5.8, 7.2, '#8a5a32', { pat: st2 }), E(7, 14, 3, 5.6, '#7a4e2c', { pat: st2 }), E(10, 6, 5.2, 4.6, '#8a5a32', { pat: st2 }), E(10.5 + k * .5, 6.6, 3.8, 3.1, '#b88a58', { blend: true }),
+    PX([[11 + k, 9]], '#d8c8a0'), EYE(8 + k, 5, { size: 2, closed: sl }), EYE(12 + k, 5, { size: 2, closed: sl }), PX([[8, 21], [9, 21], [11, 21], [12, 21]], '#c8a060')]; } };
+SPR.squirrel = { w: 22, h: 19, ay: 18, n: 4, draw(st, ph) { const k = step(ph, 4), fl = k % 2, fur = (x, y) => hash(x, y, 2) < .3 ? '#c8c4bc' : null;
+  return [C(8, 14, 3, 8 - fl, 2.6, 3.3, '#9a9a98', { pat: fur }), C(3, 8 - fl, 5, 2 - fl, 3.3, 2.4, '#9a9a98', { pat: fur, blend: true }), E(11, 12, 4.6, 4, '#8c8c8a', { rot: -.4 }), E(12.6, 13, 2, 3, '#e8e4dc', { blend: true }),
+    E(10, 16, 2.8, 1.7, '#7a7a78'), E(15, 8, 2.8, 2.4, '#8c8c8a'), PX([[14, 5]], '#7a7a78'), PX([[18, 8]], '#1a1a1c'), PX([[14, 12], [15, 12]], '#6a6a68'), EYE(16, 7)]; } };
+SPR.parakeet = { w: 28, h: 26, ay: 13, n: 4, draw(st, ph) { const sl = st === 'sleep';
+  if (sl) return [C(9, 12, 6, 24, 1.2, .5, '#46b84a', { pat: (x, y) => y > 19 ? '#3a8ad8' : null }), E(10, 8, 3.3, 5, '#46b84a', { rot: .15 }), E(9, 9, 2.6, 4, '#3a9a3e'), E(12, 4, 2.6, 2.4, '#46b84a'), E(14.3, 4.6, 1.2, 1.4, '#d8302a', { shiny: true }), LN([[11, 6], [13, 7]], '#1a1a20'), EYE(12, 3, { closed: true }), PX([[9, 13], [11, 13]], '#6a6060')];
+  const f = S2(ph) * 6;
+  const wing = dim => Pg([[11, 9], [17, 9], [10, 9 - f], [8, 10 - f * .8]], '#46b84a', { dim, pat: (x, y) => Math.hypot(x - 14, y - 9) > 5 ? '#2a7a3a' : null });
+  return [wing(1), C(10, 11, 0, 13, 1.4, .5, '#46b84a', { pat: (x) => x < 5 ? '#3a8ad8' : null }), E(15, 10, 5, 2.2, '#46b84a', { shiny: true }), E(21, 9, 2.4, 2.2, '#46b84a'), E(23.4, 9.6, 1.1, 1.3, '#d8302a', { shiny: true }), LN([[20, 11], [22, 11]], '#1a1a20'), EYE(21, 8), wing(0)]; } };
+
+/* ---------- ANTARCTICA ---------- */
+SPR.emperor = { w: 20, h: 29, ay: 28, n: 4, draw(st, ph) { const sl = st === 'sleep', k = sl ? 0 : step(ph, 4), dx = [0, .6, 0, -.6][k];
+  const P = [PX([[7, 28], [8, 28], [12, 28], [13, 28]], '#2a2a30'), C(6.5 + dx, 13, 5.5 + dx - (k === 1 ? 1 : 0), 21, 1.4, 1, '#26262e', { dim: 1 }), E(10 + dx, 17, 6, 10, '#1c1c26'), E(11.6 + dx, 18, 4.2, 8.6, '#f2f0e8', { blend: true }), E(12 + dx, 10.5, 2.2, 2.2, '#f4e2a0', { blend: true })];
+  const hy = sl ? 2.5 : 0;
+  return [...P, E(10.5 + dx, 6.5 + hy, 3.4, 3.2, '#1c1c26'), E(11.8 + dx, 8 + hy, 1.4, 1.8, '#f0b830', { blend: true }), C(12.5 + dx, 6.6 + hy, 17 + dx, 8.2 + hy, .9, .5, '#2a2a30'), PX([[14 + Math.round(dx), Math.round(7.6 + hy)]], '#e88a30'), EYE(12 + dx, 5.6 + hy, { closed: sl, pupil: '#3a3a44' }), C(13.5 + dx, 13, 15 + dx, 21, 1.4, 1, '#26262e')]; } };
+SPR.emperorchick = { w: 14, h: 18, ay: 17, n: 2, draw(st, ph) { const sl = st === 'sleep', k = sl ? 0 : step(ph, 2);
+  return [PX([[5, 17], [8, 17]], '#2a2a30'), E(7, 11, 4.8, 6, '#a4aab4', { pat: pat.spots('#c4c8d0', .25, 1, 3) }), E(7.5, 4.6 + (sl ? 1.5 : 0), 3.2, 3, '#1c1c26'), E(8.5, 5.2 + (sl ? 1.5 : 0), 2, 2, '#f2f2f4', { blend: true }), PX([[11, 5 + (sl ? 1 : 0) + k]], '#2a2a30'), EYE(9, 4.6 + (sl ? 1.5 : 0), { closed: sl })]; } };
+SPR.chinstrap = { w: 16, h: 23, ay: 22, n: 4, draw(st, ph) { const sl = st === 'sleep', k = sl ? 0 : step(ph, 4), dx = [0, .5, 0, -.5][k];
+  return [PX([[6, 22], [7, 22], [9, 22], [10, 22]], '#e89aa0'), C(5 + dx, 10, 4 + dx, 17, 1.2, .8, '#22222c', { dim: 1 }), E(8 + dx, 14, 4.8, 7.6, '#1c1c26'), E(9.4 + dx, 15, 3.4, 6.6, '#f4f2ec', { blend: true }),
+    E(9 + dx, 5.4, 3, 2.8, '#1c1c26'), E(10 + dx, 6.2, 2.2, 2, '#f4f2ec', { blend: true }), LN([[8 + dx, 7.6], [11 + dx, 8.4]], '#1c1c26'), C(11 + dx, 5.4, 14 + dx, 6, .7, .4, '#1a1a20'), EYE(10 + dx, 4.6, { closed: sl, pupil: '#3a2a20' }), C(11 + dx, 10, 12 + dx, 17, 1.2, .8, '#22222c')]; } };
+SPR.weddell = fish({ w: 42, h: 16, ay: 13, wag: .8, parts: (sl, ph, w) => [
+  Pg([[6, 8], [0, 4 + w], [2, 8], [0, 12 + w], [6, 10]], '#3e4656'), E(19, 8.5, 15, 5, '#4f5868', { pat: pat.spots('#9aa4b0', .16, 2, 6) }), E(19, 11.3, 12, 1.8, '#6a7484', { blend: true, noCrease: true }),
+  E(33, 8, 4.6, 4, '#4f5868'), E(36.2, 9.2, 2, 1.7, '#5a6474', { blend: true }), PX([[38, 9]], '#1a1a20'), PX([[36, 11], [37, 11]], '#2a2e38'), E(26, 12, 2.6, 1.2, '#3e4656', { rot: .6 }), sleepEye(34, 6.6, sl, { size: 2 })] });
+SPR.leopardseal = fish({ w: 50, h: 16, ay: 13, wag: 1.2, parts: (sl, ph, w) => [
+  Pg([[7, 9], [0, 5 + w], [2, 9], [0, 13 + w], [7, 11]], '#5a606c'), C(6, 9, 32, 9, 2.4, 5, '#7a808c', { shiny: true, pat: pat.spots('#4a505c', .1, 1, 4) }), E(24, 11.6, 11, 1.8, '#b8bec8', { blend: true, noCrease: true, pat: pat.spots('#5a606c', .2, 1, 5) }),
+  E(38, 8.4, 6.6, 4.2, '#7a808c', { blend: true }), LN([[38, 10], [44, 10]], '#2a2e38'), PX([[45, 9]], '#1a1a20'), C(28, 11, 33, 15, 1.6, 1, '#5a606c'), sleepEye(40, 7, sl)] });
+SPR.snowpetrel = { w: 24, h: 14, ay: 11, n: 4, draw(st, ph) { const sl = st === 'sleep';
+  if (sl) return [E(11, 8, 5, 3, '#f8f8fa'), E(15.5, 5.5, 2.4, 2.2, '#f8f8fa'), PX([[18, 6]], '#1a1a20'), EYE(16, 5, { closed: true }), PX([[10, 11], [12, 11]], '#3a3a44')];
+  const f = S2(ph) * 5, wing = dim => C(12, 7, 7, 7 - f, 2.2, .8, '#eef0f4', { dim });
+  return [wing(1), C(7, 8, 2, 8, 1.4, .8, '#f4f4f6'), E(12, 8, 5, 2, '#f8f8fa'), E(17, 7, 2.2, 2, '#f8f8fa'), PX([[19, 7], [20, 7]], '#1a1a20'), EYE(17, 6), wing(0)]; } };
+SPR.orca = fish({ w: 58, h: 22, ay: 13, wag: 1.6, parts: (sl, ph, w) => [
+  Pg([[9, 13], [1, 9 + w], [3, 13], [1, 18 + w]], '#16161c'), C(8, 13, 40, 13, 2, 6.2, '#16161c', { shiny: true }), E(45, 13.5, 8, 5, '#16161c', { blend: true, shiny: true }),
+  E(38, 17, 13, 2, '#f4f4f6', { clip: (x, y) => y > 16 }), E(45, 11, 2.8, 1.2, '#f4f4f6', { rot: -.2 }), E(29, 8.4, 4.4, 1.5, '#8a8a96'), Pg([[25, 8], [28, 0], [30, 8]], '#16161c'), E(39, 19, 3.2, 1.4, '#16161c', { rot: .6 }), PX([[47, 12]], '#0a0a0e')] });
+
+/* ---------- SAHARA ---------- */
+SPR.camel = quad({ w: 52, h: 50, ay: 48, c: '#c89a62', layDrop: 13, layHead: [0, -7],
+  legs: { back: 15, front: 30, top: 30, len: 16, r1: 2.6, rk: 1.9, r2: 1.4, swing: 2.2, lift: 1.5, foot: '#a87a48', fr: 2 },
+  body: () => [E(22, 26, 12.5, 7, '#c89a62', { pat: pat.spots('#b88a52', .1, 1, 4) }), E(21, 18.5, 7, 6, '#c89a62', { blend: true })],
+  tail: (sl, ph) => [C(10, 24, 9 + (sl ? 0 : S2(ph) * .5), 34, .8, .6, '#b88a52'), E(9, 35, .9, 1.6, '#6a4a2a')],
+  head: (sl, ph, hx, hy) => [C(32, 25, 38 + hx, 15 + hy, 3.8, 2.6, '#c89a62', { blend: true }), C(38 + hx, 15 + hy, 41 + hx, 10 + hy, 2.6, 2.3, '#c89a62', { blend: true }),
+    E(43.5 + hx, 10 + hy, 4.2, 2.7, '#c89a62', { rot: .2 }), E(47 + hx, 11.6 + hy, 1.9, 1.6, '#b88a52', { blend: true }), PX([[41 + hx, 7 + hy]], '#a87a48'), PX([[49 + hx, 11 + hy]], '#3a2818'), sleepEye(44 + hx, 9 + hy, sl)] });
+SPR.viper = { w: 30, h: 10, ay: 8, n: 4, draw(st, ph) { const sp = pat.spots('#a07a4a', .22, 2, 5), P = []; let p0 = null;
+  for (let x = 2; x <= 21; x += 2) { const y = 5.5 + Math.sin(x * .42 + ph * TAU) * 2, r = 1 + (x - 2) / 19 * .9; if (p0) P.push(C(p0[0], p0[1], x, y, p0[2], r, '#d8b67a', { blend: true, pat: sp })); p0 = [x, y, r]; }
+  const hy = p0[1] - 1;
+  P.push(E(24, hy, 2.8, 1.9, '#d8b67a', { pat: sp }), PX([[24, hy - 2], [25, hy - 2]], '#b89660'), EYE(25, hy - 1, { iris: '#c8a040' }));
+  if (step(ph, 4) === 2) P.push(PX([[27, hy + 1], [28, hy + 1]], '#d8302a'));
+  return P; } };
+SPR.silverant = { w: 10, h: 6, ay: 5, n: 2, draw(st, ph) { const k = step(ph, 2);
+  return [LN([[3, 3], [2 + k, 5]], '#8a8e98'), LN([[5, 3], [6 - k, 5]], '#8a8e98'), LN([[6, 3], [7 + k, 5]], '#8a8e98'), E(2, 2.8, 1.8, 1.4, '#c8ccd4', { shiny: true }), E(4.8, 2.8, 1.2, .9, '#b8bcc6', { shiny: true }), E(7.2, 2.4, 1.1, 1, '#c8ccd4', { shiny: true }), PX([[9, 1]], '#8a8e98')]; } };
+SPR.jerboa = { w: 18, h: 19, ay: 18, n: 2, draw(st, ph) { const k = st === 'sleep' ? 0 : step(ph, 2), u = k * 2;
+  return [C(5, 12 - u, 1, 15, .5, .4, '#d8b888'), E(1, 15.6, 1, 1, '#f4ecd8'), PX([[0, 16]], '#1a1412'), E(8, 11 - u, 3.6, 3.2, '#d8b888'), E(9, 12 - u, 2, 2.2, '#f4ecd8', { blend: true }),
+    C(7, 13 - u, 10, 17 - k, 1.4, .6, '#d8b888'), C(10, 17 - k, 13, 17.4 - k, .6, .5, '#d8b888'), E(11, 7.5 - u, 2.6, 2.4, '#d8b888'), C(10, 6 - u, 9, 2 - u, .9, .7, '#e8c8a8'), EYE(12, 7 - u, { size: 2 })]; } };
+SPR.scorpion = { w: 18, h: 12, ay: 11, n: 4, uv: true, draw(st, ph) { const k = step(ph, 4), legs = [];
+  for (let i = 0; i < 4; i++) { const x = 7 + i * 2, o = (k + i) % 2; legs.push(LN([[x, 9], [x - 1 + o, 11]], '#a88a40')); }
+  return [...legs, C(5, 8, 3, 5, 1.2, 1, '#c8a850'), C(3, 5, 4, 2, 1, .9, '#c8a850', { blend: true }), C(4, 2, 7, 1.5, .9, .7, '#c8a850', { blend: true }), PX([[8, 2], [8, 3]], '#7a5a20'),
+    E(9.5, 8, 4.4, 2, '#c8a850', { shiny: true }), C(13, 8, 15.5, 7, .8, .6, '#c8a850'), E(16, 6.4, 1.5, 1, '#c8a850', { shiny: true }), PX([[12, 7]], '#2a1e10')]; } };
+SPR.eagleowl = { w: 20, h: 25, ay: 23, n: 2, draw(st, ph) { const sl = st === 'sleep', k = sl ? 0 : step(ph, 2), s2 = (x, y) => hash(x, y, 8) < .2 ? '#7a5a30' : null;
+  return [E(10, 15, 5.8, 7.2, '#c8a070', { pat: s2 }), E(7, 15, 3, 5.6, '#b08a5a', { pat: s2 }), E(10, 7, 5, 4.4, '#c8a070', { pat: s2 }), E(10.4 + k * .4, 7.6, 3.6, 2.9, '#e0c49a', { blend: true }),
+    PX([[6, 3], [7, 2], [13, 2], [14, 3]], '#8a6a40'), PX([[11 + k, 10]], '#3a2a20'), EYE(8 + k, 6, { size: 2, iris: '#f08a20', closed: sl }), EYE(12 + k, 6, { size: 2, iris: '#f08a20', closed: sl }), PX([[8, 22], [9, 22], [11, 22], [12, 22]], '#c8a060')]; } };
+/* ================= Scenery ================= */
+function R(c, x, y, w, h, col) { c.fillStyle = col; c.fillRect(x | 0, y | 0, Math.max(1, w | 0), Math.max(1, h | 0)); }
+function skyStops(alt) {
+  const K = [[-18, '#05081a', '#0b1230', '#141c40'], [-10, '#0d1238', '#1c2152', '#3a2d64'], [-4, '#1c2260', '#3e3a7a', '#b4587c'], [0, '#344a8e', '#7a6aa0', '#f08a5a'],
+    [5, '#4f86cc', '#8eb4dc', '#f6c896'], [15, '#3d86d8', '#7cb4e8', '#bfe0f4'], [40, '#2f7ad6', '#6aaee8', '#b4dcf6']];
+  if (alt <= K[0][0]) return K[0].slice(1); if (alt >= K[K.length - 1][0]) return K[K.length - 1].slice(1);
+  for (let i = 0; i < K.length - 1; i++) if (alt <= K[i + 1][0]) { const u = (alt - K[i][0]) / (K[i + 1][0] - K[i][0]); return [1, 2, 3].map(j => mixH(K[i][j], K[i + 1][j], u)); }
+}
+const SKYC = {};
+function skyCanvas(hz, alt) { const key = hz + '|' + Math.round(alt); if (SKYC[key]) return SKYC[key]; const s = skyStops(Math.round(alt)); const P = Painter(W, H);
+  vgrad(P, 0, 0, W, Math.round(hz * .55), [s[0], s[1]]); vgrad(P, 0, Math.round(hz * .55), W, hz - Math.round(hz * .55) + 1, [s[1], s[2]]); P.rect(0, hz, W, H - hz, s[2]); return SKYC[key] = P.flush(); }
+const STARS = (() => { const r = rng(42), a = []; for (let i = 0; i < 150; i++) a.push([Math.floor(r() * W), Math.floor(r() * 120), r()]); return a; })();
+/* clouds: pre-shaded, recoloured per sky bucket */
+const CLOUDS = {};
+function cloudSprite(seed, w, h, alt) { const key = seed + '|' + Math.round(alt / 2); if (CLOUDS[key]) return CLOUDS[key]; const s = skyStops(alt), r = rng(seed);
+  const sunset = clamp(1 - Math.abs(alt - 1) / 7, 0, 1), night = clamp((-alt - 2) / 10, 0, 1);
+  let base = mixH(mixH('#f6f6fa', s[1], .25), s[2], sunset * .55); base = mixH(base, mixH(s[0], '#7880a8', .35), night);
+  const parts = []; const n = 5 + Math.floor(r() * 4); for (let i = 0; i < n; i++) { const cx = w * (.15 + .7 * r()), rr = h * (.25 + .3 * r()); parts.push(E(cx, h - rr - 1 - r() * h * .2, rr * (1.2 + r() * .6), rr, base, { dither: .22 })); }
+  parts.push(E(w / 2, h - 3, w * .45, 2.6, base, { dither: .2 }));
+  return CLOUDS[key] = raster(w, h, parts, { noOutline: true }).cv; }
+
+function drawCelestial(g, env, hz, t, opt) {
+  const sa = clamp((-env.alt - 2) / 10, 0, 1);
+  if (sa > 0) for (const [sx, sy, b] of STARS) { if (sy > hz - 6) continue; const tw = .5 + .5 * Math.sin(t * 2 + b * 40); g.globalAlpha = sa * (.3 + .7 * tw * b); R(g, sx, sy, 1, 1, b > .9 ? '#ffe9c0' : '#ffffff'); if (b > .97) { g.globalAlpha *= .4; R(g, sx - 1, sy, 3, 1, '#ffffff'); R(g, sx, sy - 1, 1, 3, '#ffffff'); } }
+  g.globalAlpha = 1;
+  const hr = env.lp.hour;
+  if (opt && opt.aurora && env.dark > .5) { const a = (env.dark - .5) * 2; for (let i = 0; i < W; i += 1) { const y0 = 10 + Math.sin(i / 29 + t * .25) * 10 + Math.sin(i / 9 + t * .6) * 3; const len = 18 + Math.sin(i / 13 + t * .4) * 10 + Math.sin(i / 5) * 3;
+      for (let j = 0; j < len; j += 1) { g.globalAlpha = a * .28 * (1 - j / len) * (.6 + .4 * Math.sin(i / 3 + t)); R(g, i, y0 + j, 1, 1, j < 3 ? '#c8ffd8' : j < len * .6 ? '#4fe39a' : '#8a6ad8'); } } g.globalAlpha = 1; }
+  const sx = ((hr - 6) / 12) * W, sy = hz - env.alt * (hz / 70);
+  if (env.alt > -4 && sy < hz + 8) { const col = env.alt < 6 ? '#ffb35c' : '#fff3c4';
+    for (const [r, a] of [[14, .08], [10, .14], [7, .3]]) { g.globalAlpha = a; for (let dy = -r; dy <= r; dy++) { const w = Math.round(Math.sqrt(r * r - dy * dy) * 2); R(g, sx - w / 2, sy + dy, w, 1, col); } }
+    g.globalAlpha = 1; for (let dy = -5; dy <= 5; dy++) { const w = Math.round(Math.sqrt(25 - dy * dy) * 2); R(g, sx - w / 2, sy + dy, w, 1, dy < -2 ? '#fffbe8' : col); } }
+  const transit = (12 + env.moon * 24.8) % 24; let dh = hr - transit; dh = ((dh + 12) % 24 + 24) % 24 - 12;
+  const malt = 55 * Math.cos(dh / 12 * Math.PI) - 12;
+  if (malt > 0 && env.alt < 3 && env.moon > .03 && env.moon < .97) { const mx = W / 2 + dh / 6 * W * .5, my = hz - malt * (hz / 75); const ill = env.moon < .5 ? env.moon * 2 : (1 - env.moon) * 2;
+    g.globalAlpha = .12; for (let dy = -9; dy <= 9; dy++) { const w = Math.round(Math.sqrt(81 - dy * dy) * 2); R(g, mx - w / 2, my + dy, w, 1, '#dfe6ff'); } g.globalAlpha = 1;
+    for (let dy = -4; dy <= 4; dy++) for (let dx = -4; dx <= 4; dx++) { if (dx * dx + dy * dy > 17) continue; const nx = (dx + 4.5) / 9; const lit = env.moon < .5 ? nx > 1 - ill : nx < ill; if (lit) R(g, mx + dx, my + dy, 1, 1, (dx + dy) % 3 === 0 && Math.abs(dx) < 3 ? '#d8d2b8' : '#f4f0d8'); } }
+}
+
+/* ---------- SAVANNAH ---------- */
+const SCN = {};
+SCN.savannah = { hz: 112, clouds: [[11, 70, 22, 30, 3], [12, 56, 18, 150, 14], [13, 84, 26, 250, 6], [14, 40, 14, 330, 24]],
+  season: m => (m >= 11 || m <= 5) ? 'wet' : 'dry',
+  build(se) { const wet = se === 'wet'; const P = Painter(W, H), r = rng(7);
+    // far hills
+    for (let x = 0; x < W; x++) { const top = Math.round(99 + 5 * Math.sin(x / 41) + 3 * Math.sin(x / 13 + 1) + fbm(x / 9, 0, 2) * 3);
+      for (let y = top; y < 113; y++) P.set(x, y, y === top ? '#c3b2c6' : ((y - top) / 10 > bay(x, y) ? '#8f7c9c' : '#a491b0')); }
+    // kopje boulders
+    for (const [cx, cy, rx, ry] of [[46, 108, 9, 6], [58, 106, 7, 7], [36, 111, 7, 4], [68, 110, 6, 4], [52, 102, 5, 4]]) paint(P, E(cx, cy, rx, ry, '#a99b94', { pat: pat.spots('#8a7c78', .08, 1, 4) }));
+    paintLine(P, [[50, 104], [52, 110]], '#6e6264'); paintLine(P, [[60, 103], [61, 108]], '#6e6264');
+    paint(P, E(57, 99, 4, 1.6, '#5d6b3a')); paintLine(P, [[57, 100], [57, 102]], '#4a3a2a');
+    // plain
+    vgrad(P, 0, 112, W, 68, wet ? ['#a9b062', '#98a252', '#829046', '#6c7a3a'] : ['#d6b46a', '#cca45a', '#be924a', '#a97e3a'], (x, y) => !P.has(x, y));
+    // distant acacias
+    for (const [x, y, s] of [[118, 112, 1], [178, 113, .8], [306, 111, 1.1], [96, 113, .7]]) { paintLine(P, [[x, y], [x, y - 6 * s]], '#4a3a2a'); paint(P, E(x, y - 7 * s, 7 * s, 1.8 * s, '#5d6b3a', { dither: .25 })); }
+    // grass texture (perspective)
+    for (let i = 0; i < 2600; i++) { const y = 113 + Math.floor(Math.pow(r(), .8) * 67), x = Math.floor(r() * W), k = (y - 112) / 68, len = 1 + Math.round(k * 4 * r()); const R5 = ramp(wet ? '#86a040' : '#c49a48');
+      const lean = r() < .5 ? -1 : 1; for (let j = 0; j < len; j++) P.set(x + (j > len / 2 ? lean : 0), y - j, j === len - 1 ? R5[4] : R5[k > .5 ? 1 + (j % 2) : 2]); }
+    // rocks
+    for (const [x, y, rx] of [[118, 170, 4], [300, 160, 3], [12, 140, 3], [196, 172, 3]]) paint(P, E(x, y, rx, rx * .6, '#9a8e86'));
+    // hyena den + termite mound + aardvark burrow
+    paint(P, E(24, 165, 15, 6, '#8a6a46', { pat: pat.spots('#a4845a', .1, 1, 2) })); paint(P, E(26, 167, 5.5, 3, '#22160e', { flat: 1 }));
+    paint(P, C(52, 161, 52, 140, 9, 3.4, '#a0623a', { pat: pat.spots('#8a5230', .12, 1, 3) })); paint(P, C(45, 160, 46, 147, 3.5, 2, '#a0623a')); paint(P, C(58, 160, 59, 150, 3, 1.6, '#985a34'));
+    P.set(51, 146, '#3a2416'); P.set(53, 152, '#3a2416'); P.set(46, 152, '#3a2416'); paint(P, E(60, 171, 4, 2, '#3a2416', { flat: 1 }));
+    // waterhole rim
+    paint(P, E(150, 147, wet ? 40 : 34, 8, '#7a5a36', { pat: pat.spots('#5e4428', .15, 1, 6) }));
+    // big acacia
+    paint(P, E(262, 157, 26, 4, '#8f6c34', { flat: 1 }));
+    for (const b of [[262, 156, 260, 118, 3.6, 2.4], [260, 121, 243, 97, 2.1, 1.1], [261, 119, 278, 95, 2.1, 1.1], [260, 128, 290, 104, 1.6, .9], [259, 125, 230, 104, 1.5, .9], [270, 106, 266, 94, 1, .7]]) paint(P, C(...b, '#5a3e2a', { pat: pat.stripes('#4a3020', 3, 1, 1.4) }));
+    const leaf = (x, y, n) => { const v = fbm(x / 4, y / 3, 3); return v > .62 ? '#8aa84a' : v < .36 ? '#3f5a26' : null; };
+    for (const [cx, cy, rx, ry] of [[250, 94, 19, 5.2], [277, 92, 17, 5], [236, 99, 10, 4], [293, 98, 10, 3.6], [263, 89, 13, 4.2], [228, 96, 6, 2.5]]) paint(P, E(cx, cy, rx, ry, '#5f7a32', { pat: leaf, flatness: .7 }));
+    return { back: P.flush() }; },
+  anim(f, t, env, sky) { // waterhole reflecting the sky
+    const wr = this._se === 'wet' ? 36 : 30; for (let dy = -5; dy <= 5; dy++) { const w = Math.round(Math.sqrt(1 - (dy / 5.6) ** 2) * wr) * 2; R(f, 150 - w / 2, 147 + dy, w, 1, mixH(sky[dy < 0 ? 1 : 2], '#2a3a4a', .35 + dy * .02)); }
+    for (let i = 0; i < 6; i++) { const x = 130 + ((i * 11 + t * 4) % 40), y = 144 + (i % 4) * 2; R(f, x, y, 3, 1, mixH(sky[2], '#ffffff', .3)); }
+    // acacia shade
+    if (env.alt > 0) { f.globalAlpha = .22 * clamp(env.alt / 10, 0, 1); for (let dy = -3; dy <= 3; dy++) { const w = Math.round(Math.sqrt(1 - (dy / 3.4) ** 2) * 28) * 2; R(f, 262 - w / 2 - (env.lp.hour - 12) * 2, 156 + dy, w, 1, '#3a2410'); } f.globalAlpha = 1; } },
+  front(f, t) { const wet = this._se === 'wet', c1 = wet ? '#b8d070' : '#e8cc84', c2 = wet ? '#7a9a3a' : '#c49a48', c3 = wet ? '#4f6a2a' : '#8f6c2c'; for (let i = 0; i < 70; i++) { const x = (i * 23.7) % W, h = 5 + (i * 7) % 7, sw = Math.sin(t * 1.3 + i * .7) * 1.2; for (let j = 0; j < h; j++) R(f, x + Math.round(sw * j / h), 180 - j, 1, 1, j === h - 1 ? c1 : j > h / 2 ? c2 : c3); } }
+};
+
+/* ---------- ARCTIC ---------- */
+SCN.arctic = { hz: 104, clouds: [[21, 90, 12, 60, 2], [22, 70, 10, 230, 4]],
+  season: m => (m >= 6 && m <= 9) ? 'summer' : 'winter',
+  build(se) { const P = Painter(W, H), r = rng(3), summer = se === 'summer';
+    const range = (peaks, base, lit, shade, rock, rockLit, snowTop, seed) => { const top = new Array(W);
+      for (let x = 0; x < W; x++) { let best = 999, bi = 0; peaks.forEach((p, i) => { const h = p[1] + Math.abs(x - p[0]) * p[2]; if (h < best) { best = h; bi = i; } }); best += fbm(x / 6, seed, 3) * 4 - 2; top[x] = [Math.round(best), bi]; }
+      for (let x = 0; x < W; x++) { const [ty, bi] = top[x], pk = peaks[bi];
+        for (let y = Math.max(0, ty); y < base; y++) { const litSide = x < pk[0] + (y - pk[1]) * .35 + (fbm(x / 5, y / 5, seed + 1) - .5) * 8;
+          const isRock = fbm(x / 7, y / 3, seed + 2) > (summer ? .44 : .6) - (y - ty) * (summer ? .012 : .004) && y - ty > 2; let c = litSide ? lit : shade; if (isRock) c = litSide ? rockLit : rock; if (y === ty) c = snowTop;
+          P.set(x, y, c); } } };
+    range([[30, 72, .55], [96, 64, .6], [170, 76, .5], [250, 66, .55], [318, 74, .6]], 104, '#c9d2e6', '#a3aecb', '#7a8098', '#8e95ac', '#e6ecf6', 1);
+    range([[-10, 70, .7], [58, 82, .7], [140, 86, .8], [206, 74, .65], [300, 86, .7]], 104, '#f2f5fb', '#aab6d2', '#4f5468', '#6e7488', '#ffffff', 5);
+    // glacier tongue
+    for (let y = 84; y < 106; y++) { const half = 10 + (y - 84) * 1.3; for (let x = Math.round(214 - half); x < 214 + half; x++) { P.set(x, y, (bay(x, y) < .2 && (x + y) % 5 === 0) ? '#b8cce4' : '#e8f0fa'); } }
+    for (let i = 0; i < 9; i++) { const x = 200 + i * 3.4, y = 92 + (i % 3) * 3; paintLine(P, [[x, y], [x + 2, y + 2]], '#8fb2d4'); }
+    for (let x = 186; x < 243; x++) for (let y = 101; y < 106; y++) P.set(x, y, y === 101 ? '#ffffff' : (hash(x, 0, 4) < .25 && y > 102) ? '#7fb0d8' : '#a8d0ec');
+    // ice floes (on the sea)
+    for (const [x, y, w] of (summer ? [[188, 111, 30]] : [[188, 111, 30], [96, 109, 16], [262, 108, 12], [30, 114, 20], [140, 118, 10]])) { for (let k = 0; k < w; k++) { P.set(x + k, y, '#ffffff'); P.set(x + k, y + 1, '#e2ecf8'); P.set(x + k, y + 2, k % 4 ? '#8fb6d8' : '#6a96c4'); } }
+    // snowfield
+    for (let x = 0; x < W; x++) { const ty = 122 + Math.round(2 * Math.sin(x / 17) + Math.sin(x / 5)); P.set(x, ty, '#ffffff'); P.set(x, ty + 1, '#9fbcdc');
+      vgrad(P, x, ty + 2, 1, H - ty - 2, summer ? ['#8a8668', '#7a7a58', '#6a6a4a', '#5c5a40'] : ['#f4f7fc', '#e4ebf6', '#d6dff0', '#cbd5ea']); }
+    if (summer) { for (let i = 0; i < 900; i++) { const x = r() * W, y = 124 + r() * 56; P.set(x, y, ['#a8a070', '#6a8a4a', '#d8d0b8', '#4a5a3a', '#c8a0c8'][Math.floor(r() * 5)]); } for (const [x, y, rx] of [[60, 150, 16], [240, 166, 22], [180, 134, 10]]) paint(P, E(x, y, rx, 2.4, '#eef2fa', { flat: 1 })); }
+    for (let i = 0; i < (summer ? 0 : 9); i++) { const y0 = 132 + i * 5.5; for (let x = 0; x < W; x++) { const y = Math.round(y0 + 3 * Math.sin(x / (18 + i * 3) + i)); if (fbm(x / 20, i, 9) > .48) { P.set(x, y, '#ffffff'); P.set(x, y + 1, '#c4d0e6'); } } }
+    for (const [x, y, rx] of [[150, 150, 5], [300, 168, 6], [18, 160, 4]]) { paint(P, E(x, y, rx, rx * .55, '#4f5468')); for (let k = -rx + 1; k < rx; k++) P.set(x + k, Math.round(y - rx * .55 * Math.sqrt(1 - (k / rx) ** 2)), '#ffffff'); }
+    for (let i = 0; i < 16; i++) { const x = 40 + i * 9, y = 168 - i * 1.6 + (i % 2) * 2; P.set(x, y, '#b6c4dc'); P.set(x + 1, y, '#b6c4dc'); P.set(x, y + 1, '#c8d4e8'); }
+    // trapper's hut
+    const hx = 22, hy = 119; for (let y = hy - 9; y < hy; y++) for (let x = hx - 9; x < hx + 9; x++) P.set(x, y, (y - hy) % 3 === 0 ? '#4e3424' : (x < hx - 6 ? '#6a4a32' : '#5a3e2a'));
+    for (let k = 0; k < 13; k++) for (let x = hx - 12 + k; x < hx + 12 - k; x++) P.set(x, hy - 10 - k * .6 | 0, summer ? (k < 2 ? '#3a3e4a' : '#4e5262') : (k < 2 ? '#c8d4e8' : '#f6f8fc'));
+    P.rect(hx + 2, hy - 6, 3, 6, '#2a1c14'); P.rect(hx - 6, hy - 7, 4, 3, '#1a1c2c'); P.rect(hx + 6, hy - 18, 2, 4, '#3a2a20');
+    return { back: P.flush() }; },
+  anim(f, t, env, sky) { const a = clamp(env.alt, -20, 30);
+    for (let y = 104; y < 122; y++) { const u = (y - 104) / 18; const c = mixH(mixH(sky[2], sky[1], .4), '#14304e', .35 + u * .45); for (let x = 0; x < W; x += 8) R(f, x, y, 8, 1, ((x / 8 + y) % 2 && u > .2) ? mixH(c, '#0c2038', .2) : c); }
+    for (let i = 0; i < 22; i++) { const x = (i * 37 + t * 3) % W, y = 106 + (i * 7) % 15; R(f, x, y, 3 + i % 4, 1, mixH(sky[2], '#ffffff', .25)); }
+    if (env.alt > -2) { const sx = ((env.lp.hour - 6) / 12) * W; for (let y = 105; y < 122; y += 1) { if ((y + Math.floor(t * 4)) % 2) continue; const w = 2 + (y - 104) / 3; f.globalAlpha = .6; R(f, sx - w / 2 + Math.sin(y + t * 3) * 2, y, w, 1, '#ffe2a8'); } f.globalAlpha = 1; } },
+  post(g, t, env) { if (env.dark > .45) { g.globalAlpha = .9; R(g, 16, 112, 4, 3, '#ffcf6a'); g.globalAlpha = .2; R(g, 13, 109, 10, 9, '#ffcf6a'); g.globalAlpha = 1; for (let i = 0; i < 4; i++) { const p = (t * .4 + i * .25) % 1; g.globalAlpha = .3 * (1 - p); R(g, 29 + Math.sin(p * 6 + i) * 2, 99 - p * 18, 2, 2, '#c8ccd8'); } g.globalAlpha = 1; } }
+};
+
+/* ---------- RAINFOREST ---------- */
+SCN.rainforest = { hz: 70, clouds: [[31, 50, 12, 150, 2]],
+  season: m => (m >= 4 && m <= 7) ? 'flood' : 'normal',
+  build() { const P = Painter(W, H), r = rng(11);
+    // far misty canopy
+    for (let i = 0; i < 70; i++) { const x = r() * W, y = 52 + r() * 26, rr = 7 + r() * 9; paint(P, E(x, y, rr, rr * .7, mixH('#6f9a88', '#9ec2b0', r() * .4), { dither: .25, max: 3 })); }
+    vgrad(P, 0, 60, W, 120, ['#5f8a76', '#3f6a54', '#24402f', '#1a2e22'], (x, y) => !P.has(x, y));
+    // mid trees
+    for (const x of [72, 128, 206, 246, 304]) { paint(P, C(x, 52, x + 2, 178, 2.6, 3.4, '#3e4a3a', { dim: 1 })); for (let k = 0; k < 5; k++) paint(P, E(x + (r() - .5) * 26, 46 + r() * 16, 10 + r() * 6, 6 + r() * 3, '#2f5c40', { dim: 1, pat: (xx, yy) => fbm(xx / 3, yy / 3, 4) > .6 ? '#3f7a52' : null })); }
+    // vines
+    for (const vx of [92, 116, 196, 228, 300]) { let x = vx; for (let y = 0; y < 100 + (vx % 40); y++) { x += Math.sin(y / 11 + vx) * .35; P.set(x, y, y % 9 === 0 ? '#5fae5a' : '#2f6a3a'); if (y % 13 === 0) { P.set(x + 1, y, '#4f9a4a'); P.set(x + 2, y + 1, '#4f9a4a'); } } }
+    // big trunks
+    const bark = (x, y) => { const v = fbm(x / 1.5, y / 9, 8); return v > .64 ? '#7a5a40' : v < .34 ? '#3a2618' : null; };
+    const moss = (x, y) => fbm(x / 3, y / 4, 12) > .66 ? '#5a8a3a' : null;
+    for (const [x, w] of [[34, 8], [164, 9], [282, 7]]) { paint(P, C(x, -4, x + 1, 176, w, w + 1.5, '#5a4030', { pat: pat.any(moss, bark) })); paint(P, Pg([[x - w - 12, 178], [x - w + 1, 150], [x, 178]], '#5a4030', { pat: bark })); paint(P, Pg([[x + w + 12, 178], [x + w - 1, 152], [x, 178]], '#4e3628', { pat: bark })); }
+    paint(P, E(34, 113, 4.4, 6.6, '#1a100a', { flat: 1 })); paint(P, E(34, 114, 3.6, 5.6, '#0e0806', { flat: 1 }));
+    // branches with moss and bromeliads
+    const brs = [[42, 58, 142, 56, 3.4, 2.6], [172, 96, 276, 94, 3.6, 2.8], [42, 132, 152, 130, 3.4, 2.6]];
+    for (const b of brs) { paint(P, C(...b, '#5e3e28', { pat: bark })); for (let x = b[0]; x < b[2]; x++) { const y = Math.round(b[1] + (b[3] - b[1]) * (x - b[0]) / (b[2] - b[0]) - b[4]); if (fbm(x / 4, b[1], 5) > .48) { P.set(x, y, '#6aaa4a'); P.set(x, y - 1, hash(x, y) > .6 ? '#8ac85a' : null); } } }
+    const brom = (x, y, c) => { for (const [dx, dy] of [[-3, -2], [-2, -3], [-1, -4], [0, -5], [1, -4], [2, -3], [3, -2]]) paintLine(P, [[x, y], [x + dx, y + dy]], '#3f8a4a'); paintLine(P, [[x, y], [x, y - 4]], c); P.set(x, y - 5, c); };
+    brom(60, 54, '#e04a3a'); brom(250, 91, '#e84a8a'); brom(130, 128, '#f0a030'); brom(196, 92, '#e04a3a');
+    // big leaves
+    const bigLeaf = (x, y, rx, ry, rot, c) => { paint(P, E(x, y, rx, ry, c, { rot, pat: (xx, yy) => fbm(xx / 2, yy / 2, 6) > .68 ? '#5cbf6a' : null })); const cs = Math.cos(rot), sn = Math.sin(rot); paintLine(P, [[x - cs * rx * .9, y - sn * rx * .9], [x + cs * rx * .9, y + sn * rx * .9]], '#7ad07a'); };
+    for (let i = 0; i < 26; i++) { const left = i < 13, x = left ? r() * 110 : 210 + r() * 110, y = r() * 26; bigLeaf(x, y, 9 + r() * 6, 3.4 + r() * 1.5, (r() - .5) * 1.4, r() < .5 ? '#2f7a45' : '#3f9a55'); }
+    for (let i = 0; i < 10; i++) bigLeaf(140 + r() * 70, -2 + r() * 8, 8, 3, (r() - .5), '#2f7a45');
+    for (let i = 0; i < 14; i++) { const x = r() * W, y = 60 + r() * 90; if (Math.abs(x - 164) < 14) continue; bigLeaf(x, y, 6 + r() * 4, 2.4, (r() - .5) * 1.6, '#2e6e40'); }
+    // frog leaf
+    paint(P, C(232, 176, 226, 142, 1, .8, '#3b7a3e')); bigLeaf(226, 141, 15, 3.4, -.08, '#4aa85a');
+    // heliconia
+    for (let k = 0; k < 5; k++) { const x = 300 - k * 3, y = 150 + k * 4; paint(P, Pg([[x, y], [x + 7, y - 2], [x + 1, y + 2]], '#e0402e')); P.set(x + 6, y - 2, '#f2c12e'); } paintLine(P, [[298, 148], [294, 178]], '#3b7a3e');
+    // floor
+    vgrad(P, 0, 166, W, 14, ['#3a2a1c', '#2a1c12'], (x, y) => !P.has(x, y) || y > 170);
+    for (let i = 0; i < 260; i++) { const x = r() * W, y = 166 + r() * 14; P.set(x, y, ['#8a5a2a', '#a8742e', '#5a3a1e', '#6a8a3a'][Math.floor(r() * 4)]); }
+    for (const fx of [12, 70, 118, 196, 252, 316]) for (let k = -4; k <= 4; k++) paintLine(P, [[fx, 178], [fx + k * 2.2, 168 + Math.abs(k) * 1.4]], k % 2 ? '#3f8a46' : '#5aaa52');
+    paint(P, C(80, 174, 140, 172, 3, 3.4, '#5a3e2a', { pat: moss }));
+    return { back: P.flush() }; },
+  anim(f, t, env) { if (env.alt > 10) { f.globalAlpha = .07; for (let k = 0; k < 4; k++) { const bx = 120 + k * 26 + Math.sin(t * .2 + k) * 4; for (let y = 0; y < 170; y += 1) R(f, bx + y * .35, y, 7, 1, '#fff6c8'); } f.globalAlpha = 1; }
+    f.globalAlpha = .1; for (let k = 0; k < 3; k++) { const y = 74 + k * 9, x = (t * (2 + k) + k * 90) % (W + 120) - 120; R(f, x, y, 140, 5, '#dfeee6'); R(f, x + 20, y - 2, 90, 2, '#dfeee6'); } f.globalAlpha = 1; },
+  front(f, t, env, sky) { if (this._se === 'flood') { for (let y = 158; y < H; y++) { const u = (y - 158) / 22; f.globalAlpha = .82; R(f, 0, y, W, 1, mixH('#3a5a4a', '#1e3328', u)); if ((y + Math.floor(t * 2)) % 4 === 0) { f.globalAlpha = .35; for (let x = (y * 7) % 13; x < W; x += 13) R(f, x + Math.sin(t + y) * 2, y, 5, 1, '#8ab0a0'); } } f.globalAlpha = 1; }
+    const r = rng(5); for (let i = 0; i < 8; i++) { const left = i < 4, x = left ? -4 + r() * 20 : W - 18 + r() * 20, y = 120 + r() * 60, sw = Math.sin(t * .8 + i) * 1;
+      f.fillStyle = i % 2 ? '#1e4a2e' : '#245a36'; for (let k = 0; k < 18; k++) R(f, x + (left ? k : -k) * .9 + sw, y - k * .5, 3, 2, f.fillStyle); } },
+  post(g, t, env) { if (env.dark > .55) for (let i = 0; i < 22; i++) { const fx = (i * 53 + Math.sin(t * .7 + i) * 20) % W, fy = 70 + ((i * 37) % 90) + Math.sin(t * 1.3 + i * 2) * 6; if (Math.sin(t * 3 + i * 1.7) > .2) { g.globalAlpha = .9; R(g, fx, fy, 1, 1, '#f8f08a'); g.globalAlpha = .22; R(g, fx - 1, fy - 1, 3, 3, '#f8f08a'); } } g.globalAlpha = 1; }
+};
+
+/* ---------- REEF ---------- */
+const WATERC = {};
+SCN.reef = { hz: 0, water: true,
+  build() { const P = Painter(W, H), F = Painter(W, H), r = rng(21);
+    for (let i = 0; i < 40; i++) { const x = r() * W, y = 126 + r() * 22, rr = 6 + r() * 12; paint(F, E(x, y, rr, rr * .6, '#56607e', { dither: .25 })); }
+    vgrad(P, 0, 150, W, 30, ['#e6d29a', '#d8c088', '#c8ac72']);
+    for (let i = 0; i < 9; i++) { const y0 = 154 + i * 3; for (let x = 0; x < W; x++) { const y = Math.round(y0 + Math.sin(x / 7 + i * 1.7) * 1.2); if ((x + i) % 3) { P.set(x, y, '#f2e4b4'); P.set(x, y + 1, '#b89c62'); } } }
+    for (let i = 0; i < 30; i++) P.set(r() * W, 152 + r() * 27, ['#f6eee0', '#e8a888', '#9a8a70'][i % 3]);
+    const enc = (x, y) => { const v = hash(Math.floor(x / 2), Math.floor(y / 2), 31); return v < .025 ? '#e87a8a' : v < .045 ? '#f0b040' : v < .07 ? '#8ac86a' : v < .2 ? '#56486a' : null; };
+    for (const [cx, cy, rx, ry] of [[14, 120, 22, 22], [40, 136, 22, 16], [8, 150, 18, 12], [58, 148, 14, 8], [26, 104, 12, 10]]) paint(P, E(cx, cy, rx, ry, '#6a5a7a', { pat: enc }));
+    paint(P, E(26, 130, 8, 3.4, '#1a1426', { flat: 1 })); paint(P, E(14, 155, 6, 3, '#1a1426', { flat: 1 }));
+    for (const [cx, cy, rx, ry] of [[300, 128, 28, 26], [276, 146, 24, 12], [316, 158, 14, 12]]) paint(P, E(cx, cy, rx, ry, '#6a5a7a', { pat: enc }));
+    paint(P, E(284, 152, 17, 6, '#140f20', { flat: 1 }));
+    // brain coral
+    paint(P, E(118, 150, 11, 7, '#a8b46a', { pat: pat.stripes('#6a7a44', 2.4, .9, .8, 2.2) }));
+    // table coral
+    paint(P, C(206, 151, 206, 132, 2.4, 1.8, '#b098c0')); paint(P, E(206, 129, 20, 3.4, '#b8a0c8', { pat: pat.spots('#e2d0ee', .2, 1, 4) }));
+    // staghorn
+    const stag = (x, y, c, s) => { const rr = rng(x); const grow = (x0, y0, a, len, d) => { const x1 = x0 + Math.cos(a) * len, y1 = y0 + Math.sin(a) * len; paint(P, C(x0, y0, x1, y1, 1.6 * s, 1.2 * s, c)); P.set(x1, y1, '#fff0e0'); if (d > 0) { grow(x1, y1, a - .5 + rr() * .2, len * .75, d - 1); grow(x1, y1, a + .5 - rr() * .2, len * .75, d - 1); } }; grow(x, y, -Math.PI / 2, 9 * s, 3); };
+    stag(160, 152, '#e0743a', 1); stag(240, 152, '#e8c34a', .8); stag(96, 152, '#c86a9a', .7); stag(48, 122, '#e0743a', .6);
+    // sea fan
+    for (let k = -6; k <= 6; k++) { let x = 140, y = 151; for (let s = 0; s < 18; s++) { x += k * .18 + Math.sin(s + k) * .2; y -= 1; P.set(x, y, '#9a4ab8'); if (s % 4 === 0) P.set(x + 1, y, '#c07ad8'); } }
+    // tube sponges
+    for (const [x, h, c] of [[184, 14, '#d8a040'], [190, 10, '#c88a30'], [256, 12, '#8a6ad0']]) { paint(P, C(x, 152, x, 152 - h, 2.6, 2.4, c)); paint(P, E(x, 152 - h, 2, 1, '#2a1a10', { flat: 1 })); }
+    // anemone base
+    paint(P, E(78, 150, 7, 2.6, '#c06a50'));
+    return { back: P.flush(), far: F.flush() }; },
+  anim(f, t, env, sky) { const L = clamp((env.alt + 6) / 24, 0, 1);
+    const far = this._far; if (far) { f.drawImage(far, 0, 0); f.globalCompositeOperation = 'source-atop'; f.globalAlpha = .6; R(f, 0, 0, W, H, mixH('#0e2a50', '#3aa0c8', L)); f.globalAlpha = 1; f.globalCompositeOperation = 'source-over'; }
+  },
+  anim2(f, t, env) { const L = clamp((env.alt + 6) / 24, 0, 1);
+    // caustics on sand
+    if (L > .2) { f.fillStyle = '#fff6d0'; f.globalAlpha = (L - .2) * .55; for (let y = 151; y < 180; y++) for (let x = 0; x < W; x++) { const v = Math.sin(x * .21 + t * 1.1 + Math.sin(y * .33 + t * .7) * 1.4) + Math.sin(y * .29 - t * .9 + Math.sin(x * .13 - t * .5) * 1.6); if (Math.abs(v) < .16) f.fillRect(x, y, 1, 1); } f.globalAlpha = 1; }
+    // anemone tentacles
+    for (let i = 0; i < 16; i++) { const a = -Math.PI + (i / 15) * Math.PI, sw = Math.sin(t * 1.4 + i * .6) * 1.6; let x = 78 + Math.cos(a) * 5, y = 149; for (let s = 0; s < 8; s++) { x += Math.cos(a) * .5 + sw * .12; y -= .9; R(f, x, y, 1, 1, s > 6 ? '#fff0f6' : s > 4 ? '#f2b8d8' : '#d888b0'); } }
+    for (const [sx, n] of [[106, 6], [196, 5], [228, 4], [66, 3]]) for (let k = 0; k < n; k++) { const bx = sx + k * 2; for (let y = 0; y < 12 + k % 3 * 3; y++) R(f, bx + Math.round(Math.sin(t + y / 3 + k) * y / 6), 152 - y, 1, 1, y % 4 ? '#4f9a4a' : '#6ab85a'); }
+  },
+  post(g, t, env) { const L = clamp((env.alt + 6) / 24, 0, 1);
+    if (L > .25) { g.globalAlpha = (L - .25) * .22; for (let k = 0; k < 6; k++) { const bx = ((k * 61 + t * 5) % (W + 80)) - 40; for (let y = 0; y < 150; y++) R(g, bx + y * .3, y, Math.max(1, 7 - y / 26), 1, '#e8fbff'); } g.globalAlpha = 1; }
+    for (let i = 0; i < W; i += 4) R(g, i, Math.sin(i / 9 + t * 2) > 0 ? 0 : 1, 3, 1, L > .3 ? '#d4f6ff' : '#2a4a7a');
+    for (let i = 0; i < 10; i++) { const p = (t * .25 + i * .13) % 1, x = 78 + (i % 3) * 60 + Math.sin(p * 20 + i) * 2, y = 150 - p * 150; g.globalAlpha = .5; R(g, x, y, 1, 1, '#e8fbff'); R(g, x + 1, y - 1, 1, 1, '#e8fbff'); } g.globalAlpha = 1;
+    if (env.dark > .5) { const rr = rng(Math.floor(t * 3)); for (let i = 0; i < 26; i++) { g.globalAlpha = (env.dark - .5) * 1.6 * rr(); R(g, rr() * W, 20 + rr() * 130, 1, 1, '#7fe3f0'); } g.globalAlpha = 1; } }
+};
+
+/* ---------- DEEP SEA ---------- */
+SCN.deep = { hz: 0, water: true,
+  build() { const P = Painter(W, H), r = rng(41);
+    const strata = (x, y) => { const v = Math.sin(y * .35 + fbm(x / 8, y / 8, 3) * 3); return v > .6 ? '#2a3046' : v < -.5 ? '#161a28' : null; };
+    for (let y = 30; y < H; y++) { const edge = 238 - (y - 30) * .32 + fbm(0, y / 6, 2) * 14; for (let x = Math.round(edge); x < W; x++) { const c = strata(x, y) || '#1e2234'; P.set(x, y, x - edge < 2 ? '#3a4260' : c); } }
+    for (let y = 120; y < H; y++) { const edge = 26 + (y - 120) * .3 - fbm(0, y / 5, 7) * 8; for (let x = 0; x < edge; x++) P.set(x, y, x > edge - 2 ? '#343c58' : (strata(x, y) || '#1c2032')); }
+    vgrad(P, 0, 170, W, 10, ['#232838', '#181c28'], (x, y) => !P.has(x, y));
+    for (let i = 0; i < 120; i++) P.set(r() * W, 170 + r() * 10, '#2e3448');
+    // whale fall
+    paint(P, E(98, 168, 9, 4.4, '#c8c0a8', { pat: pat.spots('#e8e0c8', .2, 1, 3) })); paint(P, E(104, 171, 5, 1.6, '#a89c84'));
+    for (let i = 0; i < 12; i++) { const x = 110 + i * 4.2; paint(P, E(x, 170, 1.8, 1.6, '#cfc7b0')); if (i > 1 && i < 9) paintLine(P, [[x, 169], [x - 2, 160 - Math.sin(i / 3) * 4], [x - 4, 164]], '#bdb59c'); }
+    for (let i = 0; i < 40; i++) { const x = 92 + r() * 64, y = 165 + r() * 7; P.set(x, y, r() < .5 ? '#e8e0c8' : r() < .5 ? '#d88a4a' : '#d84a4a'); }
+    // bamboo coral & sea pens on the wall
+    const bamboo = (x, y, h) => { let px = x; for (let s = 0; s < h; s++) { px += Math.sin(s / 4 + x) * .3; P.set(px, y - s, s % 4 === 0 ? '#c8a040' : '#e0e4ea'); if (s > h / 2 && s % 5 === 0) { paintLine(P, [[px, y - s], [px + 3, y - s - 4]], '#e0e4ea'); } } };
+    bamboo(262, 112, 18); bamboo(286, 90, 14); bamboo(250, 150, 16); bamboo(20, 140, 12);
+    for (const [x, y] of [[200, 170], [214, 172], [60, 172]]) { paintLine(P, [[x, y], [x, y - 7]], '#e8a0b8'); for (let k = 1; k < 6; k++) { P.set(x - 1, y - k - 1, '#f0b8c8'); P.set(x + 1, y - k - 1, '#f0b8c8'); } }
+    for (const [x, y] of [[150, 175], [180, 173], [40, 176]]) for (let k = 0; k < 5; k++) { const a = k / 5 * TAU; paintLine(P, [[x, y], [x + Math.cos(a) * 3, y + Math.sin(a) * 1.5]], '#c86a5a'); }
+    return { back: P.flush() }; },
+  post(g, t) { for (let i = 0; i < 80; i++) { const mx = (i * 47.3) % W, my = ((i * 29.1) + t * 3 * (.5 + (i % 5) / 10)) % H; g.globalAlpha = .3 + (i % 3) * .1; R(g, mx + Math.sin(t + i) * 1.5, my, 1, 1, '#d8e4f0'); } g.globalAlpha = 1; }
+};
+function waterCanvas(kind, L) { const key = kind + Math.round(L * 24); if (WATERC[key]) return WATERC[key]; const P = Painter(W, H);
+  if (kind === 'reef') vgrad(P, 0, 0, W, H, [mixH('#0b1c3c', '#6ad2e8', L), mixH('#081634', '#3aa6d0', L), mixH('#050c20', '#1a6a9c', L), mixH('#040a18', '#14507c', L)]);
+  else vgrad(P, 0, 0, W, H, [mixH('#0a1430', '#2a6aa0', L), mixH('#060c22', '#0e2a4e', L), '#03060f', '#020409']);
+  return WATERC[key] = P.flush(); }
+/* ================= More scenery: London, Antarctica, Sahara; weather ================= */
+function mountainRange(P, peaks, base, lit, shade, rock, rockLit, snowTop, seed, rockT) {
+  const top = new Array(W);
+  for (let x = 0; x < W; x++) { let best = 999, bi = 0; peaks.forEach((p, i) => { const h = p[1] + Math.abs(x - p[0]) * p[2]; if (h < best) { best = h; bi = i; } }); best += fbm(x / 6, seed, 3) * 4 - 2; top[x] = [Math.round(best), bi]; }
+  for (let x = 0; x < W; x++) { const [ty, bi] = top[x], pk = peaks[bi];
+    for (let y = Math.max(0, ty); y < base; y++) { const litSide = x < pk[0] + (y - pk[1]) * .35 + (fbm(x / 5, y / 5, seed + 1) - .5) * 8;
+      const isRock = fbm(x / 7, y / 3, seed + 2) > (rockT ?? .6) - (y - ty) * .004 && y - ty > 2; let c = litSide ? lit : shade; if (isRock) c = litSide ? rockLit : rock; if (y === ty) c = snowTop; P.set(x, y, c); } }
+}
+
+/* ---------- LONDON ---------- */
+const LONDON_WINDOWS = [];
+SCN.london = { hz: 100, clouds: [[51, 80, 16, 40, 6], [52, 64, 14, 200, 16], [53, 90, 18, 300, 10]],
+  season: m => m === 12 || m <= 2 ? 'winter' : m <= 4 ? 'spring' : m <= 9 ? 'summer' : 'autumn',
+  build(se) { const P = Painter(W, H), r = rng(61); LONDON_WINDOWS.length = 0;
+    // far skyline
+    let x = 0; while (x < W) { const w = 6 + Math.floor(r() * 14), h = 14 + Math.floor(r() * 26); for (let yy = 100 - h; yy < 100; yy++) for (let xx = x; xx < x + w; xx++) P.set(xx, yy, xx === x ? '#7a80a0' : '#666c8c');
+      for (let yy = 100 - h + 3; yy < 98; yy += 4) for (let xx = x + 2; xx < x + w - 1; xx += 3) if (r() < .5) LONDON_WINDOWS.push([xx, yy, 1, r()]); x += w + Math.floor(r() * 3); }
+    for (let yy = 18; yy < 100; yy++) { const half = (yy - 18) * .14; for (let xx = Math.round(236 - half); xx <= Math.round(236 + half); xx++) P.set(xx, yy, xx < 236 ? '#9aa4c4' : '#6e7898'); }
+    for (let yy = 24; yy < 96; yy += 5) LONDON_WINDOWS.push([236, yy, 1, r()]);
+    paint(P, E(96, 72, 9, 9, '#8a90a8', { clip: (xx, yy) => yy < 72 })); P.rect(86, 72, 21, 12, '#767c98'); paintLine(P, [[96, 60], [96, 63]], '#9aa0b8'); P.rect(95, 62, 3, 2, '#9aa0b8');
+    paintLine(P, [[160, 100], [160, 36], [192, 36]], '#c8a050'); paintLine(P, [[160, 40], [176, 36]], '#c8a050'); paintLine(P, [[190, 36], [190, 52]], '#8a8070');
+    // terraced houses
+    const doors = ['#b8302a', '#2a4a8a', '#2a6a4a', '#1a1a20', '#d8b040'];
+    for (let i = 0; i < 5; i++) { const hx = i * 40, top = 72;
+      for (let yy = top; yy < 132; yy++) for (let xx = hx; xx < hx + 40; xx++) { const brick = (yy % 3 === 0) || ((xx + (Math.floor(yy / 3) % 2) * 3) % 6 === 0); P.set(xx, yy, xx === hx ? '#5a2a20' : brick ? '#7a3a2c' : (hash(xx, yy, i) < .1 ? '#a05a44' : '#8c4a38')); }
+      for (let k = 0; k < 10; k++) for (let xx = hx + k; xx < hx + 40 - k; xx++) P.set(xx, top - k, k === 0 ? '#3a3e48' : (xx % 3 ? '#4a4e5a' : '#565a66'));
+      P.rect(hx + 28, top - 16, 6, 10, '#7a3a2c'); P.rect(hx + 28, top - 17, 6, 1, '#5a2a20'); P.rect(hx + 29, top - 19, 2, 2, '#c86a3a'); P.rect(hx + 32, top - 19, 2, 2, '#c86a3a');
+      for (const [wx, wy] of [[hx + 6, top + 6], [hx + 22, top + 6], [hx + 6, top + 28], [hx + 22, top + 28]]) { P.rect(wx - 1, wy - 1, 11, 15, '#e8e4dc'); P.rect(wx, wy, 9, 13, '#34404e'); P.rect(wx, wy + 6, 9, 1, '#e8e4dc'); P.rect(wx + 4, wy, 1, 13, '#e8e4dc'); P.rect(wx - 2, wy + 13, 13, 2, '#d8d4cc');
+        if (wx > hx + 10 && wy > top + 10) continue; LONDON_WINDOWS.push([wx, wy, 2, r()]); }
+      P.rect(hx + 22, top + 30, 10, 26, '#e8e4dc'); P.rect(hx + 23, top + 32, 8, 24, doors[i]); P.set(hx + 30, top + 44, '#e8c860'); P.rect(hx + 21, top + 56, 12, 2, '#c8c4bc'); P.rect(hx + 20, top + 58, 14, 2, '#b8b4ac');
+      LONDON_WINDOWS.push([hx + 24, top + 31, 3, r()]); }
+    // pavement + park
+    vgrad(P, 0, 132, 200, 10, ['#a8a8a4', '#8e8e8a']); for (let xx = 0; xx < 200; xx += 12) P.rect(xx, 132, 1, 10, '#7a7a76'); P.rect(0, 141, 200, 2, '#c8c8c0');
+    const grass = se === 'winter' ? ['#6a7a4a', '#5a6a40', '#4a5a36'] : se === 'autumn' ? ['#6a8a3e', '#5a7a36', '#4a6a2e'] : ['#6a9a3e', '#5a8a36', '#4a7a2e'];
+    vgrad(P, 0, 143, W, 37, grass, (xx, yy) => !P.has(xx, yy)); vgrad(P, 200, 118, 120, 25, [grass[0], grass[1]], (xx, yy) => !P.has(xx, yy));
+    for (let i = 0; i < 1400; i++) { const xx = r() * W, yy = 120 + r() * 60; if (!(xx > 200 || yy > 143)) continue; P.set(xx, yy, r() < .5 ? mixH(grass[0], '#b8d070', .4) : grass[2]); }
+    for (let xx = 0; xx < W; xx++) { const yy = Math.round(166 + Math.sin(xx / 40) * 3); for (let k = 0; k < 5; k++) P.set(xx, yy + k, k === 0 ? '#c8b890' : (hash(xx, k, 3) < .2 ? '#a89870' : '#bcac84')); }
+    for (let xx = 200; xx < W; xx += 4) { paintLine(P, [[xx, 128], [xx, 142]], '#1a1c22'); P.set(xx, 127, '#3a3c44'); } P.rect(200, 131, 120, 1, '#1a1c22'); P.rect(200, 140, 120, 1, '#1a1c22');
+    for (const [cx, cy, rx] of [[214, 128, 12], [300, 126, 14]]) paint(P, E(cx, cy, rx, 6, '#3f6a34', { pat: (xx, yy) => fbm(xx / 2, yy / 2, 4) > .62 ? '#5a8a44' : null }));
+    // lamp, bin, bench, leaf pile
+    paint(P, C(150, 142, 150, 98, 1.4, 1, '#2a2e34')); paint(P, E(150, 95, 3.2, 2.6, '#3a3e46')); P.rect(148, 96, 5, 2, '#e8d8a0'); paint(P, E(150, 143, 3, 1.2, '#2a2e34'));
+    paint(P, C(120, 149, 120, 138, 5, 4.6, '#2e4a3a')); P.rect(114, 136, 13, 2, '#24382e'); paint(P, E(117, 150, 1.4, 1.4, '#1a1a1a')); paint(P, E(124, 150, 1.4, 1.4, '#1a1a1a'));
+    P.rect(188, 150, 26, 2, '#6a4a2e'); P.rect(188, 146, 26, 2, '#7a5a3a'); P.rect(188, 142, 26, 2, '#6a4a2e'); P.rect(189, 152, 2, 6, '#2a2a2e'); P.rect(211, 152, 2, 6, '#2a2a2e');
+    for (let i = 0; i < 160; i++) { const a = r() * Math.PI, rr = r() * 12; P.set(296 + Math.cos(a) * rr * 1.4, 172 - Math.sin(a) * rr * .6, ['#c87a2a', '#a8582a', '#8a4a22', '#d8a040'][i % 4]); }
+    // plane tree
+    const bark = pat.patches('#c8c8a0', 3.5, 6);
+    paint(P, C(262, 162, 260, 96, 5.2, 3.4, '#8a8a6a', { pat: bark })); paint(P, Pg([[250, 164], [257, 150], [262, 164]], '#8a8a6a', { pat: bark })); paint(P, Pg([[274, 164], [266, 150], [262, 164]], '#7a7a5a', { pat: bark }));
+    for (const b of [[260, 104, 230, 74, 2.4, 1.2], [261, 100, 290, 66, 2.4, 1.2], [260, 116, 304, 96, 2, 1], [260, 112, 218, 96, 1.8, .9], [262, 96, 262, 46, 2.2, 1.1], [240, 86, 226, 60, 1.2, .7], [280, 80, 300, 54, 1.2, .7]]) paint(P, C(...b, '#7a7a5a', { pat: bark }));
+    if (se !== 'winter') { const leaf = se === 'autumn' ? '#c8782a' : se === 'spring' ? '#86b850' : '#4a7a3a'; const hi = se === 'autumn' ? '#e8a840' : se === 'spring' ? '#b8e07a' : '#6aa04a', lo = se === 'autumn' ? '#8a4a1e' : '#2e5a2a';
+      const lp = (xx, yy) => { const v = fbm(xx / 2, yy / 2, 7); return v > .62 ? hi : v < .36 ? lo : null; };
+      const cl = []; for (let i = 0; i < 46; i++) { const a = r() * TAU, d = Math.sqrt(r()); cl.push([262 + Math.cos(a) * d * 42, 72 + Math.sin(a) * d * 32, 6 + r() * 5, 4 + r() * 3]); }
+      cl.sort((p1, p2) => p1[1] - p2[1]); for (const [cx, cy, rx, ry] of cl) paint(P, E(cx, cy, rx, ry, leaf, { pat: lp, dither: .3 }));
+      for (let i = 0; i < 120; i++) { const a = r() * TAU, d = Math.sqrt(r()); const xx = 262 + Math.cos(a) * d * 48, yy = 72 + Math.sin(a) * d * 36; if (P.has(xx, yy)) continue; P.set(xx, yy, r() < .5 ? leaf : lo); } }
+    else for (let i = 0; i < 40; i++) { const a = -Math.PI / 2 + (r() - .5) * 2.4, l = 10 + r() * 30, sx = 262 + (r() - .5) * 20, sy = 60 + r() * 40; paintLine(P, [[sx, sy], [sx + Math.cos(a) * l, sy + Math.sin(a) * l]], '#6a6a52'); }
+    return { back: P.flush() }; },
+  post(g, t, env) { const hr = env.lp.hour, dusk = env.alt < 2;
+    if (dusk) for (const [x, y, s, v] of LONDON_WINDOWS) { const on = (hr >= 16 || hr < 1) ? v < .7 : (hr < 6 ? v < .12 : v < .35); if (!on) continue; const c = v < .2 ? '#ffd88a' : v < .5 ? '#ffe8b0' : '#f0c870';
+      if (s === 2) { g.globalAlpha = .9; R(g, x, y, 4, 6, c); R(g, x + 5, y, 4, 6, c); R(g, x, y + 7, 4, 6, c); R(g, x + 5, y + 7, 4, 6, c); g.globalAlpha = .15; R(g, x - 3, y - 3, 15, 19, c); }
+      else if (s === 3) { g.globalAlpha = .8; R(g, x, y, 6, 2, c); } else { g.globalAlpha = .85; R(g, x, y, 1, 1, c); } } g.globalAlpha = 1;
+    if (env.alt < 1) { g.globalAlpha = .12; for (let y = 98; y < 160; y++) { const w = (y - 98) * .8 + 4; R(g, 150 - w / 2, y, w, 1, '#ffd88a'); } g.globalAlpha = .35; R(g, 145, 92, 11, 7, '#ffe4a0'); g.globalAlpha = 1; R(g, 148, 96, 5, 2, '#fff2c8'); } }
+};
+
+/* ---------- ANTARCTICA ---------- */
+SCN.antarctica = { hz: 100, clouds: [[71, 90, 12, 80, 4], [72, 60, 10, 260, 10]],
+  season: m => (m >= 11 || m <= 3) ? 'summer' : 'winter',
+  build(se) { const P = Painter(W, H), r = rng(71), summer = se === 'summer';
+    mountainRange(P, [[20, 60, .5], [80, 70, .55], [150, 56, .5], [220, 72, .6], [300, 62, .5]], 100, '#dfe8f6', '#a8b8d8', '#6a7088', '#8a90a8', '#ffffff', 31, .7);
+    for (const [x0, w, h] of [[30, 44, 12], [232, 60, 16], [150, 20, 7]]) { for (let y = 100 - h; y < 102; y++) for (let x = x0; x < x0 + w; x++) P.set(x, y, y === 100 - h ? '#ffffff' : x > x0 + w * .7 ? '#9cc0e4' : (hash(x, y, 2) < .05 ? '#c8dcf0' : '#eef4fc')); }
+    if (!summer) for (let y = 100; y < 118; y++) for (let x = 0; x < W; x++) P.set(x, y, (hash(x, Math.floor(y / 2), 5) < .03) ? '#b8cce4' : (y % 5 === 0 && x % 23 < 12 ? '#dbe6f4' : '#eaf1fa'));
+    for (let x = 0; x < W; x++) { const ty = 118 + Math.round(1.5 * Math.sin(x / 13)); P.set(x, ty, '#ffffff'); P.set(x, ty + 1, '#8fb2d4'); vgrad(P, x, ty + 2, 1, H - ty - 2, ['#f2f6fc', '#e2eaf6', '#d4def0', '#c6d2ea']); }
+    for (let i = 0; i < 8; i++) { let x = r() * W, y = 126 + r() * 50; for (let s = 0; s < 14; s++) { P.set(x, y, '#9ab8d8'); x += 1 + r(); y += r() < .5 ? 1 : -1; } }
+    for (let i = 0; i < 6; i++) { const y0 = 134 + i * 7; for (let x = 0; x < W; x++) { const y = Math.round(y0 + 2 * Math.sin(x / (16 + i * 4) + i)); if (fbm(x / 18, i, 3) > .5) { P.set(x, y, '#ffffff'); P.set(x, y + 1, '#c4d2e8'); } } }
+    for (let i = 0; i < 70; i++) { const x = 150 + r() * 90, y = 121 + r() * 7; P.set(x, y, '#1c1c26'); P.set(x, y + 1, r() < .7 ? '#f2f0e8' : '#1c1c26'); P.set(x, y - 1, '#1c1c26'); }
+    return { back: P.flush() }; },
+  anim(f, t, env, sky) { if (this._se !== 'summer') return;
+    for (let y = 100; y < 118; y++) { const u = (y - 100) / 18; const c = mixH(mixH(sky[2], sky[1], .4), '#12283e', .35 + u * .45); R(f, 0, y, W, 1, c); }
+    for (let i = 0; i < 18; i++) { const x = (i * 41 + t * 2.5) % W, y = 102 + (i * 7) % 14; R(f, x, y, 3 + i % 4, 1, mixH(sky[2], '#ffffff', .25)); }
+    for (const [x, y, w] of [[60, 108, 14], [200, 112, 20], [290, 104, 10]]) { R(f, x, y, w, 1, '#ffffff'); R(f, x, y + 1, w, 1, '#d8e4f2'); R(f, x, y + 2, w, 1, '#7aa0c8'); } }
+};
+
+/* ---------- SAHARA ---------- */
+SCN.desert = { hz: 110, clouds: [[81, 60, 10, 120, 12]], milky: true,
+  build() { const P = Painter(W, H), r = rng(81);
+    for (let x = 0; x < W; x++) { const top = Math.round(103 + (fbm(x / 30, 2, 2) > .55 ? -5 : 0) + Math.sin(x / 50) * 2); for (let y = top; y < 112; y++) P.set(x, y, y === top ? '#b88a7a' : ((y - top) / 8 > bay(x, y) ? '#8a6458' : '#9c7464')); }
+    const dune = (base, amp, seed, lit, shade, crest) => { const h = x => base - amp * (Math.pow(Math.sin(x / (34 + seed * 3) + seed), 2) * .7 + fbm(x / 40, seed, 2) * .6);
+      for (let x = 0; x < W; x++) { const y0 = Math.round(h(x)), facesLeft = h(x + 1) < h(x - 1);
+        for (let y = y0; y < H; y++) { const d = y - y0; let c = facesLeft ? lit : shade; if (d === 0) c = crest; else if (!facesLeft && d < 2) c = mixH(shade, '#5a3020', .2);
+          if ((y + Math.round(Math.sin(x / 5) * 1.5)) % 4 === 0 && d > 2) c = mixH(c, facesLeft ? '#fff0d0' : '#4a2818', .18); P.set(x, y, c); } } };
+    dune(122, 20, 1, '#e8a868', '#b8704a', '#f8d0a0'); dune(146, 22, 2, '#eeb070', '#c07a4e', '#fbd8a8'); dune(172, 16, 3, '#f2bc7c', '#cc8656', '#fde0b0');
+    // oasis palms
+    const palm = (x, y, h, lean) => { for (let s = 0; s < h; s++) { const px = x + lean * (s / h) * (s / h) * 8; P.set(px, y - s, s % 3 ? '#6a4a2e' : '#8a6a44'); P.set(px + 1, y - s, '#5a3e26'); }
+      const tx = x + lean * 8, ty = y - h; for (let k = 0; k < 7; k++) { const a = -Math.PI + k / 6 * Math.PI, pts = []; for (let s = 0; s < 12; s++) pts.push([tx + Math.cos(a) * s, ty + Math.sin(a) * s * .5 + s * s * .04]); for (let s = 0; s < pts.length - 1; s++) { P.set(pts[s][0], pts[s][1], s % 2 ? '#4a8a3a' : '#3a7a32'); P.set(pts[s][0], pts[s][1] + 1, '#2e5a28'); } } P.set(tx, ty + 1, '#8a5a2a'); P.set(tx + 1, ty + 2, '#8a5a2a'); };
+    palm(22, 150, 30, 1); palm(40, 152, 24, -1); palm(10, 156, 20, .5);
+    paint(P, E(30, 157, 18, 3, '#3a6a7a', { flat: 1 })); for (let i = 0; i < 12; i++) P.set(18 + i * 2, 156 + (i % 2), '#6aa0b0');
+    // rocks
+    for (const [cx, cy, rx, ry] of [[300, 142, 20, 10], [284, 148, 12, 6], [316, 150, 10, 8]]) paint(P, E(cx, cy, rx, ry, '#9a5a3a', { pat: pat.stripes('#7a4228', 3, 1, .1, .8) }));
+    for (let i = 0; i < 18; i++) { const x = 60 + r() * 220, y = 160 + r() * 18; for (let k = -2; k <= 2; k++) P.set(x + k, y - Math.abs(k) % 2 - 1, '#8a7a4a'); P.set(x, y - 2, '#a89a5a'); }
+    return { back: P.flush() }; }
+};
+/* Milky Way for the desert sky */
+function drawMilky(g, env, t) { const a = clamp((-env.alt - 8) / 8, 0, 1); if (a <= 0) return; const r = rng(99);
+  for (let i = 0; i < 700; i++) { const u = r(), x = u * W, cy = 20 + u * 60 + (r() - .5) * 26 * (1 - Math.abs(u - .5)); g.globalAlpha = a * (.15 + r() * .35); R(g, x, cy, 1, 1, r() < .2 ? '#ffe8d0' : '#dfe6ff'); }
+  g.globalAlpha = a * .07; for (let x = 0; x < W; x += 2) { const cy = 20 + x / W * 60; R(g, x, cy - 8, 2, 16, '#c8d0ff'); } g.globalAlpha = 1; }
+
+/* ---------- Weather ---------- */
+function drawWeather(g, wx, t, kind, hz) { if (!wx || wx.kind === 'clear' || kind === 'deep') return;
+  const under = kind === 'water';
+  if (under) { if (wx.kind === 'rain' || wx.kind === 'storm') for (let i = 0; i < 30; i++) { const x = (i * 37 + Math.floor(t * 9) * 13) % W; g.globalAlpha = .6; R(g, x, 1, 2, 1, '#e8fbff'); } g.globalAlpha = 1; return; }
+  if (wx.kind === 'cloudy' || wx.kind === 'rain' || wx.kind === 'storm' || wx.kind === 'snow') { g.globalAlpha = wx.kind === 'cloudy' ? .12 : .22; R(g, 0, 0, W, hz, '#6a7080'); g.globalAlpha = 1; }
+  if (wx.kind === 'rain' || wx.kind === 'storm') { g.fillStyle = '#c8d8ec'; for (let i = 0; i < 160; i++) { const sp = 140 + (i % 5) * 20, x = ((i * 53.3) + t * sp * .35) % (W + 20) - 10, y = ((i * 97.1) + t * sp) % (H + 10) - 5; g.globalAlpha = .45; g.fillRect(x | 0, y | 0, 1, 3); g.fillRect((x - 1) | 0, (y + 3) | 0, 1, 1); } g.globalAlpha = 1; }
+  if (wx.kind === 'snow') { for (let i = 0; i < 130; i++) { const x = ((i * 47.7) + Math.sin(t * .8 + i) * 6 + t * 4) % W, y = ((i * 71.3) + t * (10 + i % 7 * 2)) % H; g.globalAlpha = .85; R(g, x, y, i % 4 ? 1 : 2, i % 4 ? 1 : 2, '#ffffff'); } g.globalAlpha = 1; }
+  if (wx.kind === 'fog') { for (let k = 0; k < 6; k++) { const y = hz - 30 + k * 14, x = (t * (3 + k) + k * 70) % (W + 200) - 200; g.globalAlpha = .18; R(g, x, y, 260, 10, '#e4e8ee'); R(g, x + 40, y - 3, 180, 3, '#e4e8ee'); } g.globalAlpha = .12; R(g, 0, 0, W, H, '#dfe4ea'); g.globalAlpha = 1; }
+  if (wx.kind === 'storm' && (Math.floor(t * 10) % 97) < 2) { g.globalAlpha = .45; R(g, 0, 0, W, H, '#f4f6ff'); g.globalAlpha = 1; }
+}
+/* ================= Data ================= */
+const HAB = {
+ savannah:{name:'Savannah',place:'Serengeti, Tanzania',lat:-2.3,lon:34.8,tz:'Africa/Dar_es_Salaam',kind:'land',transpose:-5,
+   desc:'The biggest animals here sleep the least. Wild elephants manage about two hours a night, often standing up. The plains turn green in the wet season, from about November to May.',alias:'serengeti tanzania africa savanna kenya grassland safari'},
+ rainforest:{name:'Rainforest',place:'Amazon, near Manaus, Brazil',lat:-3.1,lon:-60.0,tz:'America/Manaus',kind:'land',transpose:3,
+   desc:'Close to the equator, so day and night are each about 12 hours long all year. From about April to July the rivers rise and flood the forest floor.',alias:'amazon brazil jungle manaus south america tropical'},
+ reef:{name:'Coral reef',place:'Great Barrier Reef, off Cairns, Australia',lat:-16.9,lon:146.0,tz:'Australia/Brisbane',kind:'water',transpose:0,
+   desc:'At night the reef changes shift. Day fish tuck into crevices, and the hunters and filter-feeders come out. A few nights after the full moon in November or December, the corals spawn.',alias:'australia great barrier reef ocean sea coral cairns queensland'},
+ deep:{name:'Deep sea',place:'Monterey Canyon, California · 0–1,000 m',lat:36.8,lon:-122.0,tz:'America/Los_Angeles',kind:'deep',transpose:-7,
+   desc:'No sunlight reaches the bottom, but the clock still matters. Every night, animals rise hundreds of metres to feed, then sink again at dawn.',alias:'monterey california pacific ocean abyss deep sea canyon usa'},
+ arctic:{name:'Arctic',place:'Svalbard, Norway · 78°N',lat:78.2,lon:15.6,tz:'Arctic/Longyearbyen',kind:'land',transpose:-2,
+   desc:'So far north that the sun stays up for months in summer and stays down for months in winter. Many animals here ignore the clock.',alias:'svalbard norway north pole ice snow polar longyearbyen'},
+ antarctica:{name:'Antarctica',place:'Snow Hill Island, Antarctica · 64°S',lat:-64.5,lon:-57.4,tz:'America/Argentina/Ushuaia',kind:'land',transpose:-4,
+   desc:'The seasons are flipped from the Arctic. Emperor penguins raise their chicks through the dark winter, while other penguins and the orcas only arrive for summer.',alias:'antarctica south pole penguin ice snow hill antarctic peninsula'},
+ desert:{name:'Desert',place:'Erg Chebbi dunes, near Merzouga, Morocco',lat:31.15,lon:-4.0,tz:'Africa/Casablanca',kind:'land',transpose:1,
+   desc:'Most animals here avoid the heat by coming out at night. The Saharan silver ant does the opposite and runs out at the hottest time of day.',alias:'sahara desert morocco merzouga dunes africa sand'},
+ london:{name:'London',place:'London, United Kingdom',lat:51.51,lon:-0.12,tz:'Europe/London',kind:'land',transpose:2,
+   desc:'Britain’s biggest city has a night shift too. Foxes, hedgehogs, bats and owls live between the houses and parks, and some of them hibernate through the winter.',alias:'london uk england britain city urban'},
+};
+const HAB_ORDER=['savannah','rainforest','reef','deep','arctic','antarctica','desert','london'];
+
+const A = [
+ // Reef
+ {id:'clownfish',name:'Clownfish',sci:'Amphiprion percula',hab:'reef',sp:'clownfish',r:'diurnal',move:'swim',x:78,y:136,rx:9,ry:3,spd:1.2,sx:78,sy:144,voice:'bubble',on:'Darting around its anemone',off:'Tucked into its anemone',fact:'Its slimy coating stops the anemone’s stinging tentacles from firing, so the anemone works as a bedroom with built-in security.',alias:'nemo fish'},
+ {id:'parrotfish',name:'Parrotfish',sci:'Scarus sp.',hab:'reef',sp:'parrotfish',r:'diurnal',move:'swim',x:170,y:100,rx:70,ry:8,spd:.4,sx:28,sy:130,cocoon:true,voice:'click',on:'Crunching algae off the coral',off:'Asleep in a mucus cocoon',fact:'Some parrotfish wrap themselves in a see-through mucus bubble at night, which is thought to hide their scent from predators and parasites.',alias:'fish'},
+ {id:'turtle',name:'Green sea turtle',sci:'Chelonia mydas',hab:'reef',sp:'turtle',r:'diurnal',move:'swim',x:160,y:62,rx:90,ry:10,spd:.2,sx:212,sy:150,voice:'bubble',on:'Grazing on seagrass',off:'Resting under a table coral',fact:'Resting turtles can stay underwater for hours, slowing their heart rate to save oxygen.',alias:'turtle reptile'},
+ {id:'manta',name:'Reef manta ray',sci:'Mobula alfredi',hab:'reef',sp:'manta',r:'constant',rl:'Never fully stops swimming',move:'swim',x:180,y:34,rx:80,ry:5,spd:.18,voice:'low',on:'Gliding over the reef',off:'',fact:'Mantas have to keep moving to push water over their gills. By day they queue at “cleaning stations” where small fish pick them clean.',alias:'ray stingray'},
+ {id:'whitetip',name:'Whitetip reef shark',sci:'Triaenodon obesus',hab:'reef',sp:'whitetip',r:'nocturnal',move:'swim',x:160,y:122,rx:110,ry:8,spd:.3,sx:284,sy:153,voice:'bubble',on:'Hunting through the coral',off:'Lying still in a cave',fact:'Unlike many sharks, it can pump water over its gills, so it can lie on the bottom of a cave all day and hunt at night.',alias:'shark'},
+ {id:'moray',name:'Giant moray',sci:'Gymnothorax javanicus',hab:'reef',sp:'moray',r:'nocturnal',move:'swim',x:120,y:146,rx:50,ry:3,spd:.35,sx:24,sy:139,voice:'bubble',on:'Hunting by smell',off:'Waiting in its crevice',fact:'Morays open and close their mouths constantly. It looks threatening, but it’s how they breathe.',alias:'eel'},
+ {id:'polyps',name:'Coral polyps',sci:'Acropora sp.',hab:'reef',sp:'polyps',r:'nocturnal',move:'still',x:228,y:152,copies:[[-100,0],[46,0]],voice:'ping',on:'Tentacles out, catching plankton',off:'Tentacles pulled in',fact:'Coral is made of thousands of tiny animals. Many reef corals extend their tentacles at night to catch plankton, and on a few nights a year they all spawn at once.',alias:'coral'},
+ {id:'crayfish',name:'Painted crayfish',sci:'Panulirus versicolor',hab:'reef',sp:'crayfish',r:'nocturnal',move:'walk',x:130,y:166,rx:60,spd:.25,sx:14,sy:158,hide:true,voice:'click',on:'Foraging across the sand',off:'Hidden in a crevice',fact:'By day only its long white antennae poke out of the reef. It comes out after dark to feed.',alias:'lobster crayfish crustacean'},
+ // Arctic
+ {id:'polarbear',name:'Polar bear',sci:'Ursus maritimus',hab:'arctic',sp:'polarbear',r:'cathemeral',per:6,act:.62,ph:0,move:'walk',x:150,y:170,rx:60,spd:.16,sx:96,sy:172,voice:'roar',on:'Patrolling the sea ice',off:'Napping in a snow pit',fact:'Polar bears don’t keep a strict day–night schedule. They sleep around 7 to 8 hours a day, often in a pit dug into the snow.',alias:'bear'},
+ {id:'arcticfox',name:'Arctic fox',sci:'Vulpes lagopus',hab:'arctic',sp:'arcticfox',spS:{months:[6,7,8,9],sp:'arcticfox_s'},r:'cathemeral',per:4,act:.6,ph:2,move:'walk',x:222,y:154,rx:50,spd:.4,sx:262,sy:164,voice:'bark',on:'Trotting after polar bears for scraps',off:'Curled up, tail over its nose',fact:'Its coat turns from white in winter to brown-grey in summer. In summer it stashes food like seabird eggs to dig up in winter.',alias:'fox'},
+ {id:'walrus',name:'Walrus',sci:'Odobenus rosmarus',hab:'arctic',sp:'walrus',r:'cathemeral',per:7,act:.6,ph:1,move:'still',x:62,y:132,sx:62,sy:132,voice:'low',on:'About to dive for clams',off:'Dozing on the ice edge',fact:'Walruses can stay awake for over 80 hours at sea. They can also sleep floating, held up by air pouches in their throat.',alias:'seal'},
+ {id:'reindeer',name:'Svalbard reindeer',sci:'Rangifer tarandus platyrhynchus',hab:'arctic',sp:'reindeer',r:'cathemeral',per:3,act:.6,ph:1.5,move:'walk',x:276,y:142,rx:22,spd:.14,sx:292,sy:144,voice:'grunt',on:'Grazing through the snow',off:'Lying down, chewing the cud',fact:'Their internal clock switches off during the polar day and polar night, and they feed in bouts around the clock.',alias:'caribou deer'},
+ {id:'ptarmigan',name:'Svalbard rock ptarmigan',sci:'Lagopus muta hyperborea',hab:'arctic',sp:'ptarmigan',spS:{months:[5,6,7,8,9],sp:'ptarmigan_s'},r:'diurnal',move:'hop',x:180,y:138,rx:14,spd:.5,sx:192,sy:140,voice:'croak',on:'Pecking at plants under the snow',off:'Roosting in a snow hollow',fact:'The only bird that lives on Svalbard all year. It moults from mottled brown in summer to white in winter, and croaks rather than sings.',alias:'bird grouse'},
+ {id:'ringedseal',name:'Ringed seal',sci:'Pusa hispida',hab:'arctic',sp:'ringedseal',r:'cathemeral',per:5,act:.6,ph:4,move:'swim',x:140,y:118,rx:50,ry:1,spd:.3,sx:203,sy:112,voice:'ping',on:'Fishing under the ice',off:'Hauled out on a floe',fact:'It keeps breathing holes open through thick sea ice by scratching with its claws.',alias:'seal'},
+ {id:'tern',name:'Arctic tern',sci:'Sterna paradisaea',hab:'arctic',sp:'tern',r:'diurnal',months:[5,6,7,8,9],awayNote:'Wintering in Antarctica',back:'May',move:'fly',x:160,y:50,rx:100,ry:10,spd:.35,sx:130,sy:132,voice:'chirp',on:'Diving for fish',off:'Resting on the shore',fact:'It has the longest migration of any animal, flying between the Arctic and Antarctica each year, about 70,000 km on average.',alias:'bird'},
+ {id:'littleauk',name:'Little auk',sci:'Alle alle',hab:'arctic',sp:'littleauk',r:'diurnal',months:[4,5,6,7,8],awayNote:'Out at sea in the North Atlantic',back:'April',move:'swim',x:96,y:118,rx:25,ry:1,spd:.45,sx:96,sy:118,voice:'chirp',on:'Diving for tiny crustaceans',off:'In its rock crevice nest',fact:'Svalbard’s most numerous bird, with colonies of over a million pairs in summer.',alias:'bird puffin'},
+ // Rainforest
+ {id:'jaguar',name:'Jaguar',sci:'Panthera onca',hab:'rainforest',sp:'jaguar',r:'crepuscular',move:'walk',x:170,y:176,rx:90,spd:.25,sx:100,sy:130,voice:'roar',on:'Stalking the forest floor',off:'Resting along a branch',fact:'Most active around dawn and dusk. A strong swimmer that hunts caimans and fish, even in the flooded forest.',alias:'big cat panther leopard'},
+ {id:'sloth',name:'Brown-throated sloth',sci:'Bradypus variegatus',hab:'rainforest',sp:'sloth',r:'cathemeral',per:8,act:.55,ph:1,move:'walk',x:206,y:95,rx:10,spd:.04,sx:236,sy:95,voice:'ping',on:'Creeping along a branch',off:'Hanging asleep',fact:'Wild sloths sleep about 10 hours a day, not the 15 to 20 hours often claimed from studies of sloths in zoos.',alias:'sloth'},
+ {id:'macaw',name:'Scarlet macaw',sci:'Ara macao',hab:'rainforest',sp:'macaw',r:'diurnal',move:'fly',x:170,y:40,rx:110,ry:8,spd:.28,sx:72,sy:54,voice:'squawk',on:'Flying to a clay lick',off:'Roosting with the flock',fact:'Flocks leave their roosts at dawn and gather at riverbank clay licks, eating clay that may help with toxins in their diet.',alias:'parrot bird'},
+ {id:'toucan',name:'White-throated toucan',sci:'Ramphastos tucanus',hab:'rainforest',sp:'toucan',r:'diurnal',move:'hop',x:118,y:54,rx:8,spd:.5,sx:122,sy:54,voice:'croak',on:'Picking fruit with its bill',off:'Asleep, bill tucked over its back',fact:'At night it folds its tail forward and turns its bill back over its body to sleep as a compact ball of feathers.',alias:'bird'},
+ {id:'howler',name:'Red howler monkey',sci:'Alouatta seniculus',hab:'rainforest',sp:'howler',r:'diurnal',move:'hop',x:188,y:93,rx:10,spd:.4,sx:180,sy:93,voice:'howl',on:'Howling to the neighbours',off:'Sleeping in the branches',fact:'Its dawn chorus can carry several kilometres through the forest, one of the loudest calls of any land animal.',alias:'monkey primate ape'},
+ {id:'dartfrog',name:'Amazonian poison frog',sci:'Ranitomeya ventrimaculata',hab:'rainforest',sp:'dartfrog',r:'diurnal',move:'hop',x:222,y:139,rx:8,spd:.7,sx:230,sy:139,voice:'trill',on:'Hopping on a leaf',off:'Hiding under a leaf',fact:'Active by day because its bright colours warn predators off. Fathers carry tadpoles on their backs to tiny pools of water.',alias:'frog toad amphibian'},
+ {id:'milkfrog',name:'Amazon milk frog',sci:'Trachycephalus resinifictrix',hab:'rainforest',sp:'milkfrog',r:'nocturnal',move:'hop',x:256,y:92,rx:6,spd:.6,sx:262,sy:92,voice:'croak',on:'Calling from the canopy',off:'Pressed flat against a branch',fact:'It lives high in the canopy and gives off a sticky white fluid when threatened, which is where the name comes from.',alias:'frog toad amphibian'},
+ {id:'nightmonkey',name:'Night monkey',sci:'Aotus nigriceps',hab:'rainforest',sp:'nightmonkey',r:'nocturnal',move:'hop',x:78,y:129,rx:16,spd:.45,sx:34,sy:121,voice:'hoot',on:'Foraging for fruit in the dark',off:'Sleeping in a tree hollow',fact:'The only truly nocturnal monkey. Its huge eyes help it see by moonlight.',alias:'owl monkey primate'},
+ {id:'morpho',name:'Blue morpho',sci:'Morpho menelaus',hab:'rainforest',sp:'morpho',r:'diurnal',move:'fly',x:140,y:110,rx:70,ry:14,spd:.45,sx:150,sy:138,voice:'ping',on:'Flashing blue through the trees',off:'Wings folded, camouflaged',fact:'The undersides of its wings are brown with eyespots, so it seems to blink in and out of view as it flies.',alias:'butterfly insect'},
+ // Savannah
+ {id:'lion',name:'Lion',sci:'Panthera leo',hab:'savannah',sp:'lion',r:'nocturnal',move:'walk',x:120,y:170,rx:70,spd:.2,sx:258,sy:158,voice:'roar',on:'Out hunting',off:'Dozing in the shade',fact:'Lions rest for up to 20 hours a day and do most of their hunting after dark.',alias:'big cat'},
+ {id:'elephant',name:'African elephant',sci:'Loxodonta africana',hab:'savannah',sp:'elephant',r:'cathemeral',per:12,act:.85,ph:9,move:'walk',x:124,y:142,rx:20,spd:.06,sx:118,sy:142,voice:'low',on:'Browsing and walking',off:'Sleeping standing up',fact:'Wild elephants sleep only about two hours a night, the least of any mammal studied, and often do it standing up.',alias:'elephant'},
+ {id:'giraffe',name:'Masai giraffe',sci:'Giraffa tippelskirchi',hab:'savannah',sp:'giraffe',r:'cathemeral',per:4,act:.85,ph:1,move:'walk',x:206,y:136,rx:16,spd:.08,sx:212,sy:136,voice:'low',on:'Browsing acacia leaves',off:'Napping on its feet',fact:'Giraffes sleep in short bursts, often just a few minutes at a time. At night they make a low humming sound.',alias:'giraffe'},
+ {id:'zebra',name:'Plains zebra',sci:'Equus quagga',hab:'savannah',sp:'zebra',r:'cathemeral',per:5,act:.7,ph:1,move:'walk',x:150,y:162,rx:46,spd:.11,sx:170,sy:162,voice:'bark',on:'Grazing with the herd',off:'Sleeping standing up',fact:'Zebras often sleep standing, and in groups so that some members stay alert for lions.',alias:'horse'},
+ {id:'wildebeest',name:'Wildebeest',sci:'Connochaetes taurinus',hab:'savannah',sp:'wildebeest',r:'cathemeral',per:6,act:.7,ph:3,months:[11,12,1,2,3,4,5,6,7],awayNote:'Following the rains in Kenya’s Masai Mara',back:'November',move:'walk',x:26,y:126,rx:10,spd:.1,sx:26,sy:126,copies:[[26,-5],[50,2]],voice:'grunt',on:'Grazing on the move',off:'Resting with the herd',fact:'Over a million wildebeest loop between the Serengeti and Kenya’s Masai Mara every year, following the rain and fresh grass.',alias:'gnu antelope migration'},
+ {id:'cheetah',name:'Cheetah',sci:'Acinonyx jubatus',hab:'savannah',sp:'cheetah',r:'diurnal',move:'walk',x:180,y:177,rx:90,spd:.4,sx:300,sy:176,voice:'chirp',on:'Scanning for gazelles',off:'Lying low in the grass',fact:'It hunts by day, partly to avoid lions and hyenas, which do most of their hunting at night. It chirps like a bird instead of roaring.',alias:'big cat'},
+ {id:'hyena',name:'Spotted hyena',sci:'Crocuta crocuta',hab:'savannah',sp:'hyena',r:'nocturnal',move:'walk',x:210,y:166,rx:70,spd:.3,sx:26,sy:164,voice:'whoop',on:'Hunting with the clan',off:'Asleep at the den',fact:'Spotted hyenas hunt more than they scavenge. Their whooping calls carry several kilometres at night.',alias:'hyena dog'},
+ {id:'aardvark',name:'Aardvark',sci:'Orycteropus afer',hab:'savannah',sp:'aardvark',r:'nocturnal',move:'walk',x:78,y:172,rx:20,spd:.18,sx:60,sy:172,hide:true,voice:'grunt',on:'Digging into a termite mound',off:'Asleep in its burrow',fact:'It can eat tens of thousands of termites in a single night, lapping them up with a sticky tongue up to 30 cm long.',alias:'anteater'},
+ {id:'vulture',name:'White-backed vulture',sci:'Gyps africanus',hab:'savannah',sp:'vulture',r:'diurnal',move:'fly',x:160,y:40,rx:80,ry:6,spd:.14,sx:282,sy:89,voice:'squawk',on:'Soaring on thermals',off:'Roosting in the acacia',fact:'It waits until mid-morning, when the sun has warmed the ground enough to make rising air currents for it to soar on.',alias:'bird'},
+ // Deep sea
+ {id:'lanternfish',name:'Lanternfish',sci:'Myctophidae',hab:'deep',sp:'lanternfish',r:'migrator',move:'swim',x:110,dayY:108,nightY:26,rx:60,ry:3,spd:.35,copies:[[-14,-6],[12,5],[26,-3],[-28,4],[5,-11],[-6,10]],voice:'ping',on:'',off:'',fact:'Every night they swim hundreds of metres up to feed, part of the largest daily migration on Earth. They light up with glowing spots called photophores.',alias:'fish'},
+ {id:'humboldt',name:'Humboldt squid',sci:'Dosidicus gigas',hab:'deep',sp:'humboldt',r:'migrator',move:'swim',x:190,dayY:80,nightY:34,rx:70,ry:4,spd:.26,voice:'low',on:'',off:'',fact:'By day it hides in low-oxygen water hundreds of metres down, then rises at night to hunt in packs. It can flash red and white.',alias:'squid octopus'},
+ {id:'krill',name:'Pacific krill',sci:'Euphausia pacifica',hab:'deep',sp:'krill',r:'migrator',move:'swim',x:56,dayY:56,nightY:12,rx:30,ry:2,spd:.45,copies:[[-8,-4],[8,3],[13,-5],[-13,4],[3,6],[18,1],[-4,-8]],voice:'ping',on:'',off:'',fact:'Tiny but crucial. Their nightly rise to the surface brings them within reach of whales, seabirds and fish.',alias:'shrimp plankton'},
+ {id:'angler',name:'Anglerfish',sci:'Melanocetus johnsonii',hab:'deep',sp:'angler',r:'constant',rl:'Always waiting in the dark',move:'swim',x:62,y:160,rx:3,ry:1,spd:.1,voice:'ping',on:'Dangling its glowing lure',off:'',fact:'Its lure glows thanks to bacteria living inside it. It saves energy by staying still until prey swims close.',alias:'fish'},
+ {id:'barreleye',name:'Barreleye',sci:'Macropinna microstoma',hab:'deep',sp:'barreleye',r:'constant',rl:'Always waiting in the dark',move:'swim',x:196,y:124,rx:8,ry:1,spd:.08,voice:'ping',on:'Hovering, eyes pointed up',off:'',fact:'It has a see-through head, and its green tube-shaped eyes can rotate to look up through it. Scientists filmed it alive here in Monterey Canyon.',alias:'fish'},
+ {id:'vampsquid',name:'Vampire squid',sci:'Vampyroteuthis infernalis',hab:'deep',sp:'vampsquid',r:'constant',rl:'Always waiting in the dark',move:'swim',x:86,y:138,rx:16,ry:2,spd:.1,voice:'low',on:'Drifting in the dark',off:'',fact:'Despite the name, it eats “marine snow”: drifting flakes of dead plankton and other debris, gathered on sticky filaments.',alias:'squid octopus'},
+ {id:'larvacean',name:'Giant larvacean',sci:'Bathochordaeus',hab:'deep',sp:'larvacean',r:'constant',rl:'Always waiting in the dark',move:'swim',x:166,y:48,rx:4,ry:1,spd:.08,voice:'ping',on:'Filtering through its mucus house',off:'',fact:'This tadpole-sized animal builds a mucus “house” up to a metre wide to filter food, then abandons it and builds a new one.',alias:'plankton'},
+ // London
+ {id:'redfox',name:'Urban red fox',sci:'Vulpes vulpes',hab:'london',sp:'redfox',r:'nocturnal',move:'walk',x:160,y:172,rx:80,spd:.3,sx:214,sy:134,voice:'scream',on:'Checking the bins',off:'Asleep under a bush',fact:'London has one of the densest urban fox populations in the world. The eerie screams you hear in winter are part of the mating season.',alias:'fox'},
+ {id:'hedgehog',name:'Hedgehog',sci:'Erinaceus europaeus',hab:'london',sp:'hedgehog',r:'nocturnal',hibernate:[11,12,1,2,3],move:'walk',x:100,y:173,rx:40,spd:.25,sx:296,sy:172,hide:true,voice:'snuffle',on:'Snuffling for beetles and worms',off:'Asleep in the leaf pile',fact:'Hedgehogs can travel a couple of kilometres a night looking for food, which is why gardeners cut small “hedgehog highways” in fences.',alias:'hedgehog'},
+ {id:'pipistrelle',name:'Common pipistrelle',sci:'Pipistrellus pipistrellus',hab:'london',sp:'pipistrelle',r:'nocturnal',hibernate:[11,12,1,2,3],move:'fly',x:150,y:84,rx:30,ry:10,spd:.9,sx:60,sy:64,hide:true,voice:'click',on:'Catching insects around the streetlight',off:'Roosting under the roof tiles',fact:'It weighs about 5 g, the same as a 20p coin, and can eat thousands of tiny insects in a night.',alias:'bat'},
+ {id:'pigeon',name:'Feral pigeon',sci:'Columba livia',hab:'london',sp:'pigeon',r:'diurnal',move:'walk',x:70,y:162,rx:30,spd:.3,sx:60,sy:62,copies:[[18,2],[34,-1]],voice:'coo',on:'Strutting along the pavement',off:'Roosting on a rooftop',fact:'Feral pigeons descend from wild rock doves, which nest on sea cliffs. To a pigeon, a London rooftop is just another cliff ledge.',alias:'bird dove gaston'},
+ {id:'robin',name:'European robin',sci:'Erithacus rubecula',hab:'london',sp:'robin',r:'diurnal',move:'hop',x:236,y:127,rx:6,spd:.5,sx:232,sy:84,voice:'robin',on:'Singing from the railings',off:'Roosting in the plane tree',fact:'City robins often sing at night too, probably because streetlights and daytime noise push their song into the dark.',alias:'bird'},
+ {id:'tawnyowl',name:'Tawny owl',sci:'Strix aluco',hab:'london',sp:'tawnyowl',r:'nocturnal',move:'still',x:290,y:92,sx:290,sy:92,voice:'owl',on:'Watching the park for mice',off:'Roosting close to the trunk',fact:'The classic “twit-twoo” is usually two owls: one calls “ke-wick” and another answers “hoo-hoo”.',alias:'owl bird'},
+ {id:'squirrel',name:'Grey squirrel',sci:'Sciurus carolinensis',hab:'london',sp:'squirrel',r:'diurnal',move:'hop',x:236,y:174,rx:30,spd:.6,sx:262,sy:50,hide:true,voice:'click',on:'Burying nuts in the park',off:'Curled up in its drey',fact:'Grey squirrels bury thousands of nuts each autumn and find many of them again by smell and memory.',alias:'squirrel'},
+ {id:'parakeet',name:'Ring-necked parakeet',sci:'Psittacula krameri',hab:'london',sp:'parakeet',r:'diurnal',move:'fly',x:160,y:40,rx:110,ry:8,spd:.32,sx:248,sy:66,copies:[[14,-6],[28,4]],voice:'squawk',on:'Screeching across the sky',off:'In the communal roost',fact:'Tens of thousands of these parakeets now live wild in and around London. In the evening they gather in big, noisy roosts.',alias:'parrot bird'},
+ // Antarctica
+ {id:'emperor',name:'Emperor penguin',sci:'Aptenodytes forsteri',hab:'antarctica',sp:'emperor',r:'cathemeral',per:3,act:.6,ph:0,move:'walk',x:130,y:158,rx:14,spd:.08,sx:130,sy:158,copies:[[20,4],[-18,6],[36,-2]],voice:'trumpet',on:'Waddling across the sea ice',off:'Dozing standing up',fact:'In winter the males huddle for about two months at down to −40°C, each balancing an egg on its feet. They shuffle so everyone gets a turn in the warm middle.',alias:'penguin bird'},
+ {id:'emperorchick',name:'Emperor penguin chick',sci:'Aptenodytes forsteri',hab:'antarctica',sp:'emperorchick',r:'cathemeral',per:2,act:.5,ph:1,months:[7,8,9,10,11,12],awayNote:'Fledged and out at sea',back:'July',move:'still',x:150,y:164,copies:[[22,4]],voice:'chirp',on:'Begging for food',off:'Napping on the ice',fact:'Chicks hatch in the middle of winter and stand on their parents’ feet to keep off the ice.',alias:'penguin chick bird'},
+ {id:'chinstrap',name:'Chinstrap penguin',sci:'Pygoscelis antarcticus',hab:'antarctica',sp:'chinstrap',r:'cathemeral',per:.12,act:.5,ph:0,months:[11,12,1,2,3],awayNote:'At sea for the winter',back:'November',move:'walk',x:238,y:152,rx:8,spd:.2,sx:238,sy:152,copies:[[16,3]],voice:'trumpet',on:'Guarding the nest',off:'Taking a four-second nap',fact:'Nesting chinstraps sleep in more than 10,000 micro-naps a day, each lasting about 4 seconds, adding up to around 11 hours.',alias:'penguin bird'},
+ {id:'weddell',name:'Weddell seal',sci:'Leptonychotes weddellii',hab:'antarctica',sp:'weddell',r:'cathemeral',per:6,act:.5,ph:2,move:'still',x:70,y:150,sx:70,sy:150,voice:'trillsweep',on:'Watching from the ice',off:'Sleeping on the ice',fact:'They live farther south than any other mammal and keep breathing holes open by grinding the ice with their teeth. Underwater, they call with eerie sliding trills.',alias:'seal'},
+ {id:'leopardseal',name:'Leopard seal',sci:'Hydrurga leptonyx',hab:'antarctica',sp:'leopardseal',r:'cathemeral',per:5,act:.6,ph:3,months:[11,12,1,2,3,4],awayNote:'Following the pack ice north',back:'November',move:'swim',x:170,y:112,rx:60,ry:1,spd:.25,sx:206,sy:110,voice:'low',on:'Patrolling the ice edge',off:'Hauled out on a floe',fact:'A top predator with a huge, reptile-like head. It hunts penguins near the ice edge and also filters krill through its teeth.',alias:'seal'},
+ {id:'snowpetrel',name:'Snow petrel',sci:'Pagodroma nivea',hab:'antarctica',sp:'snowpetrel',r:'diurnal',move:'fly',x:160,y:46,rx:100,ry:8,spd:.4,sx:254,sy:84,voice:'chirp',on:'Gliding over the ice',off:'Roosting on an iceberg',fact:'Its nests have been found hundreds of kilometres inland, on mountain peaks poking out of the ice sheet.',alias:'bird'},
+ {id:'orca',name:'Orca',sci:'Orcinus orca',hab:'antarctica',sp:'orca',r:'constant',rl:'Rests while swimming slowly',months:[11,12,1,2,3,4],awayNote:'Following the ice edge north',back:'November',move:'swim',x:200,y:112,rx:90,ry:1,spd:.2,voice:'whistle',on:'Hunting along the ice edge',off:'',fact:'Antarctic orcas come in several types. Some hunt seals by swimming together to make a wave that washes them off ice floes.',alias:'killer whale dolphin'},
+ // Desert
+ {id:'fennec',name:'Fennec fox',sci:'Vulpes zerda',hab:'desert',sp:'fennec',r:'nocturnal',move:'walk',x:150,y:172,rx:70,spd:.4,sx:250,sy:170,hide:true,voice:'bark',on:'Listening for insects under the sand',off:'Asleep in its burrow',fact:'Its huge ears give off heat and can hear insects moving under the sand. It can go a long time without drinking, getting water from its food.',alias:'fox'},
+ {id:'camel',name:'Dromedary camel',sci:'Camelus dromedarius',hab:'desert',sp:'camel',r:'diurnal',move:'walk',x:110,y:152,rx:30,spd:.07,sx:100,sy:152,voice:'grunt',on:'Crossing the dunes',off:'Resting on folded legs',fact:'Its hump stores fat, not water. After a long trek a camel can drink over 100 litres in about 10 minutes.',alias:'camel dromedary'},
+ {id:'viper',name:'Desert horned viper',sci:'Cerastes cerastes',hab:'desert',sp:'viper',r:'nocturnal',move:'walk',x:200,y:176,rx:40,spd:.2,sx:230,sy:176,hide:true,voice:'rasp',on:'Sidewinding across the sand',off:'Buried in the sand',fact:'It buries itself with only its eyes and horns showing, and moves by sidewinding, leaving J-shaped tracks.',alias:'snake reptile'},
+ {id:'silverant',name:'Saharan silver ant',sci:'Cataglyphis bombycina',hab:'desert',sp:'silverant',r:'heat',move:'walk',x:140,y:178,rx:60,spd:.9,sx:120,sy:178,copies:[[8,-1],[-10,1]],hide:true,voice:'click',on:'Racing across the hot sand',off:'Waiting in the nest',fact:'It comes out in the hottest part of the day, when the sand can pass 50°C and its predators are hiding. It runs at nearly a metre a second.',alias:'ant insect'},
+ {id:'jerboa',name:'Lesser Egyptian jerboa',sci:'Jaculus jaculus',hab:'desert',sp:'jerboa',r:'nocturnal',move:'hop',x:70,y:172,rx:40,spd:.6,sx:54,sy:174,hide:true,voice:'chirp',on:'Hopping after seeds',off:'In its sand-plugged burrow',fact:'It hops on long back legs like a tiny kangaroo, using its tail for balance, and hides from the daytime heat in a burrow it plugs with sand.',alias:'mouse rodent'},
+ {id:'scorpion',name:'Fat-tailed scorpion',sci:'Androctonus australis',hab:'desert',sp:'scorpion',r:'nocturnal',move:'walk',x:250,y:177,rx:25,spd:.2,sx:286,sy:156,hide:true,voice:'click',on:'Hunting under the stars',off:'Hiding under a rock',fact:'Like all scorpions, it glows blue-green under ultraviolet light. Scientists still aren’t sure why.',alias:'scorpion arachnid'},
+ {id:'eagleowl',name:'Pharaoh eagle-owl',sci:'Bubo ascalaphus',hab:'desert',sp:'eagleowl',r:'nocturnal',move:'still',x:300,y:133,sx:300,sy:133,voice:'owl',on:'Watching for jerboas',off:'Roosting on the rocks',fact:'Its sandy, streaked feathers blend into desert rock, and it hunts jerboas and other small animals at night.',alias:'owl bird'},
+];
+const BY_ID = Object.fromEntries(A.map(a=>[a.id,a]));
+
+/* ================= Time, sun, status ================= */
+const rad=Math.PI/180;
+function sunAlt(ms,lat,lon){
+  const d=ms/86400000-0.5+2440588-2451545;
+  const M=rad*(357.5291+0.98560028*d);
+  const Cc=rad*(1.9148*Math.sin(M)+0.02*Math.sin(2*M)+0.0003*Math.sin(3*M));
+  const L=M+Cc+rad*102.9372+Math.PI, e=rad*23.4397;
+  const dec=Math.asin(Math.sin(e)*Math.sin(L));
+  const ra=Math.atan2(Math.sin(L)*Math.cos(e),Math.cos(L));
+  const th=rad*(280.16+360.9856235*d)+lon*rad;
+  const Hh=th-ra, phi=lat*rad;
+  return Math.asin(Math.sin(phi)*Math.sin(dec)+Math.cos(phi)*Math.cos(dec)*Math.cos(Hh))/rad;
+}
+const fmtCache={};
+function localParts(ms,tz){
+  const f=fmtCache[tz]||(fmtCache[tz]=new Intl.DateTimeFormat('en-GB',{timeZone:tz,hour:'2-digit',minute:'2-digit',day:'numeric',month:'numeric',weekday:'short',hourCycle:'h23'}));
+  const o={};for(const p of f.formatToParts(new Date(ms)))o[p.type]=p.value;
+  const h=+o.hour, m=+o.minute;
+  return {h,m,hour:h+m/60,month:+o.month,day:+o.day,wd:o.weekday,str:String(h).padStart(2,'0')+':'+String(m).padStart(2,'0')};
+}
+const MONTHS=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+function moonPhase(ms){const p=((ms-Date.UTC(2000,0,6,18,14))/86400000/29.530588853)%1;return p<0?p+1:p}
+function moonName(p){return p<.03||p>.97?'New moon':p<.22?'Waxing crescent':p<.28?'First quarter':p<.47?'Waxing gibbous':p<.53?'Full moon':p<.72?'Waning gibbous':p<.78?'Last quarter':'Waning crescent'}
+
+const S={hab:'savannah',view:'hab',offset:0,dayOff:0,lapse:false,ylapse:false,sel:null,t:0,env:null,envs:{},status:{},wx:{},wxMode:'auto',wxLive:null,study:null};
+const qsHab=(location.hash||'').slice(1); if(HAB[qsHab]) S.hab=qsHab; else if(qsHab==='world') S.view='world'; else { try{const h=localStorage.getItem('lh_hab'); if(HAB[h]) S.hab=h;}catch(e){} }
+const nowMs=()=>Date.now()+S.offset*60000+Math.round(S.dayOff)*86400000;
+function envFor(habKey,ms){
+  const h=HAB[habKey]; const alt=sunAlt(ms,h.lat,h.lon); const lp=localParts(ms,h.tz);
+  let mx=-90,mn=90; for(let i=0;i<24;i+=2){const a=sunAlt(ms+(i-12)*3600000,h.lat,h.lon);mx=Math.max(mx,a);mn=Math.min(mn,a);}
+  const dark=clamp((6-alt)/18,0,1);
+  let phase = alt>6?'Day':alt>0?'Golden hour':alt>-6?(lp.hour<12?'Dawn':'Dusk'):alt>-12?'Twilight':'Night';
+  if(mx<-0.8) phase='Polar night'; else if(mn>-0.8) phase='Midnight sun';
+  return {alt,lp,dark,phase,moon:moonPhase(ms)};
+}
+function status(a,env){
+  if(a.months && !a.months.includes(env.lp.month)) return 'away';
+  if(a.hibernate && a.hibernate.includes(env.lp.month)) return 'asleep';
+  const alt=env.alt, hr=env.lp.hour;
+  switch(a.r){
+    case 'diurnal': return alt>-4?'awake':'asleep';
+    case 'nocturnal': return alt<-4?'awake':'asleep';
+    case 'crepuscular': return (alt>-14&&alt<10)?'awake':'asleep';
+    case 'heat': return alt>36?'awake':'asleep';
+    case 'cathemeral': { const per=a.per||5; const v=((hr+(a.ph||0))%per+per)%per; return v<per*(a.act||.6)?'awake':'asleep'; }
+    case 'migrator': return 'migrate';
+    default: return 'awake';
+  }
+}
+const isHib=(a,env)=>!!(a.hibernate&&a.hibernate.includes(env.lp.month)&&!(a.months&&!a.months.includes(env.lp.month)));
+const RL={diurnal:'Active by day',nocturnal:'Active at night',crepuscular:'Active at dawn and dusk',cathemeral:'Active in bursts, day and night',migrator:'Rises at night, sinks by day',constant:'Always active',heat:'Active in the midday heat'};
+function statusLine(a,st,env){
+  if(st==='away') return a.awayNote+'. Back around '+a.back+'.';
+  if(isHib(a,env)) return 'Hibernating until spring';
+  if(st==='migrate') return env.dark>.5?'Risen toward the surface to feed':'Hiding in the dark, hundreds of metres down';
+  return st==='awake'?a.on:a.off;
+}
+const spKey=(a,env)=>a.spS&&a.spS.months.includes(env.lp.month)?a.spS.sp:a.sp;
+
+/* ================= Weather ================= */
+function wmo(code){ if(code==null) return 'clear'; if(code<=1) return 'clear'; if(code<=3) return 'cloudy'; if(code===45||code===48) return 'fog'; if(code>=95) return 'storm'; if((code>=71&&code<=77)||code===85||code===86) return 'snow'; if(code>=51) return 'rain'; return 'clear'; }
+const WXL={clear:'Clear',cloudy:'Cloudy',rain:'Rain',storm:'Thunderstorm',snow:'Snow',fog:'Fog'};
+async function fetchWeather(){
+  try{ const lat=HAB_ORDER.map(k=>HAB[k].lat).join(','), lon=HAB_ORDER.map(k=>HAB[k].lon).join(',');
+    const r=await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,weather_code&timezone=GMT`);
+    if(!r.ok) throw 0; let j=await r.json(); if(!Array.isArray(j)) j=[j];
+    S.wxLive={}; HAB_ORDER.forEach((k,i)=>{ const c=j[i]&&j[i].current; if(c) S.wxLive[k]={kind:wmo(c.weather_code),temp:c.temperature_2m}; });
+  }catch(e){ if(!S.wxLive) S.wxLive=false; }
+  tick(true);
+}
+function wxFor(k){
+  if(S.wxMode!=='auto') return {kind:S.wxMode,temp:null,manual:true};
+  if(S.wxLive && S.wxLive[k] && Math.abs(S.offset)<=180 && Math.round(S.dayOff)===0) return S.wxLive[k];
+  return {kind:'clear',temp:null};
+}
+
+/* ================= Events ================= */
+const inM=(env,ms)=>ms.includes(env.lp.month);
+const EVENTS=[
+ {id:'lionhunt',hab:'savannah',label:'Lions on the hunt',when:e=>e.alt<-8,cycle:[45,11],hide:['lion'],draw(f,p,t){ const x=-60+p*420; const z=frame('zebra','awake',Math.floor(t*9)), l=frame('lion','awake',Math.floor(t*10));
+   f.drawImage(z.cv,Math.round(x+46),150-SPR.zebra.ay); f.drawImage(l.cv,Math.round(x),156-SPR.lion.ay); }},
+ {id:'chorus',hab:'rainforest',label:'Dawn chorus: the howler monkeys are calling',when:e=>e.alt>-7&&e.alt<9&&e.lp.hour<12,voice:'howl'},
+ {id:'cleaning',hab:'reef',label:'Cleaning station: wrasse are grooming a turtle',when:e=>e.alt>8,cycle:[55,22],hide:['turtle'],draw(f,p,t){ const tf=frame('turtle','awake',0); f.drawImage(tf.cv,40,118-SPR.turtle.ay);
+   for(let i=0;i<3;i++){ const a=t*2.4+i*2.1, x=60+Math.cos(a)*14, y=112+Math.sin(a*1.3)*6; R(f,x,y,3,1,'#3a8ad8'); R(f,x+1,y,1,1,'#1a1a24'); R(f,x+3,y,1,1,'#f2e040'); } }},
+ {id:'spawn',hab:'reef',label:'Coral spawning: the reef is releasing billions of eggs',when:e=>inM(e,[11,12])&&e.alt<-6&&e.moon>.52&&e.moon<.8,post(g,t){ for(let i=0;i<160;i++){ const p=(t*.06+i*.0123)%1, x=(i*37.7)%W+Math.sin(t+i)*3, y=152-p*150; g.globalAlpha=.7*(1-p*.6); R(g,x,y,1,1,i%3?'#f6b8d0':'#fff0e0'); } g.globalAlpha=1; }},
+ {id:'rise',hab:'deep',label:'Dusk: animals are rising toward the surface',when:e=>e.alt>-10&&e.alt<4&&e.lp.hour>=12},
+ {id:'sink',hab:'deep',label:'Dawn: animals are sinking back into the dark',when:e=>e.alt>-10&&e.alt<4&&e.lp.hour<12},
+ {id:'polarnight',hab:'arctic',label:'Polar night: the sun won’t rise for weeks',when:e=>e.phase==='Polar night'},
+ {id:'midsun',hab:'arctic',label:'Midnight sun: the sun doesn’t set',when:e=>e.phase==='Midnight sun'},
+ {id:'aurora',hab:'arctic',label:'Northern lights over Svalbard',when:e=>e.dark>.6&&!inM(e,[5,6,7,8])},
+ {id:'huddle',hab:'antarctica',label:'Emperor penguins huddling against the cold',when:e=>inM(e,[5,6,7,8])},
+ {id:'aurora_s',hab:'antarctica',label:'Southern lights over the ice',when:e=>e.dark>.75&&inM(e,[4,5,6,7,8,9])},
+ {id:'foxcall',hab:'london',label:'Foxes calling: it’s mating season',when:e=>inM(e,[12,1,2])&&e.alt<-6,voice:'scream'},
+ {id:'roost',hab:'london',label:'Parakeets flocking to their roost',when:e=>e.alt>-3&&e.alt<7&&e.lp.hour>12},
+ {id:'londondawn',hab:'london',label:'The dawn chorus is starting',when:e=>inM(e,[3,4,5,6])&&e.alt>-8&&e.alt<6&&e.lp.hour<12,voice:'robin'},
+ {id:'milky',hab:'desert',label:'The Milky Way over the Sahara',when:e=>e.alt<-16},
+ {id:'heat',hab:'desert',label:'Midday heat: only the silver ants are out',when:e=>e.alt>36},
+ {id:'flood',hab:'rainforest',label:'High water: the forest floor is flooded',when:e=>inM(e,[4,5,6,7])},
+ {id:'wet',hab:'savannah',label:'Wet season: the plains have turned green',when:e=>inM(e,[12,1,2,3])&&e.alt>0},
+];
+function activeEvents(k,env){ return EVENTS.filter(ev=>ev.hab===k&&ev.when(env)&&(!ev.cycle||(S.t%ev.cycle[0])<ev.cycle[1])); }
+
+/* ================= Render ================= */
+const cv=document.getElementById('cv'); cv.width=W; cv.height=H; const gMain=cv.getContext('2d');
+const fgc=document.createElement('canvas'); fgc.width=W; fgc.height=H; const f=fgc.getContext('2d');
+gMain.imageSmoothingEnabled=false; f.imageSmoothingEnabled=false;
+const BUILT={};
+function seasonOf(k,env){ const sc=SCN[k]; return sc.season?sc.season(env.lp.month):''; }
+function scene(k,se){ const key=k+'|'+se; if(!BUILT[key]) BUILT[key]=SCN[k].build(se); SCN[k]._far=BUILT[key].far; SCN[k]._se=se; return BUILT[key]; }
+function iconURL(key,st){ const fr=frame(key,st,st==='sleep'?0:1); const [x0,y0,x1,y1]=fr.bb; const w=x1-x0+1,h=y1-y0+1; const s=Math.max(1,Math.floor(40/Math.max(w,h)));
+  const c=document.createElement('canvas'); c.width=w*s; c.height=h*s; const x=c.getContext('2d'); x.imageSmoothingEnabled=false; x.drawImage(fr.cv,x0,y0,w,h,0,0,w*s,h*s); return c.toDataURL(); }
+const ICON={},ICON_S={};
+function icons(){ for(const a of A){ ICON[a.id]=iconURL(a.sp,'awake'); ICON_S[a.id]=iconURL(a.sp,'sleep'); } }
+function silhouette(fr,col){ fr._sil=fr._sil||{}; if(fr._sil[col]) return fr._sil[col]; const c=document.createElement('canvas'); c.width=fr.w; c.height=fr.h; const x=c.getContext('2d'); x.drawImage(fr.cv,0,0); x.globalCompositeOperation='source-in'; x.fillStyle=col; x.fillRect(0,0,fr.w,fr.h); return fr._sil[col]=c; }
+
+function animalPos(a,st,env,t,ci,huddle){
+  const ph=(a.id.length*1.7)+ci*1.3, sp=a.spd||.3;
+  if(st==='asleep') return {x:a.sx??a.x, y:a.sy??a.y, flip:a.id.length%2===0};
+  if(huddle) return {x:a.x, y:a.y, flip:ci%2===1, still:true};
+  let baseY=a.y; if(a.r==='migrator') baseY=a.dayY+(a.nightY-a.dayY)*env.dark;
+  const ang=t*sp+ph; const x=a.x+Math.sin(ang)*(a.rx||0); const dx=Math.cos(ang);
+  let y=baseY; if(a.move==='swim'||a.move==='fly') y+=Math.sin(ang*2.3)*(a.ry||0);
+  if(a.move==='hop') y-=Math.max(0,Math.sin(t*3+ph))>.85?2:0;
+  return {x,y,flip:(a.rx?dx<0:false)};
+}
+function drawShadow(c,x,y,w){ c.globalAlpha=.22; for(let dy=-1;dy<=1;dy++){ const ww=Math.round(w*(dy===0?1:.7)); R(c,x-ww/2,y+dy,ww,1,'#2a1a10'); } c.globalAlpha=1; }
+
+function renderScene(k,g){
+  const hab=HAB[k], sc=SCN[k], env=S.envs[k], t=S.t, se=seasonOf(k,env), B=scene(k,se), wx=S.wx[k]||{kind:'clear'};
+  const sky=skyStops(env.alt), evs=activeEvents(k,env), hide=new Set(evs.flatMap(e=>e.hide||[])), huddle=evs.some(e=>e.id==='huddle');
+  if(sc.water){ g.drawImage(waterCanvas(k,clamp((env.alt+6)/24,0,1)),0,0); }
+  else { g.drawImage(skyCanvas(sc.hz,env.alt),0,0); if(sc.milky) drawMilky(g,env,t); drawCelestial(g,env,sc.hz,t,{aurora:(k==='arctic'&&evs.some(e=>e.id==='aurora'))||(k==='antarctica'&&evs.some(e=>e.id==='aurora_s'))});
+    const cl=sc.clouds||[], reps=(wx.kind==='cloudy'||wx.kind==='rain'||wx.kind==='storm'||wx.kind==='snow')?2:(wx.kind==='clear'&&wx.temp!=null?0:1);
+    for(let rep=0;rep<reps;rep++) for(const [seed,w,h,x0,y0] of cl){ const cs=cloudSprite(seed+rep*7,w,h,env.alt); const x=((x0+rep*97+t*1.5*(1+seed%3*.3))%(W+w+40))-w-20; g.globalAlpha=(k==='rainforest'?.8:.95)*(1-.55*env.dark); g.drawImage(cs,Math.round(x),y0+rep*8); } g.globalAlpha=1; }
+  f.clearRect(0,0,W,H);
+  if(sc.anim) sc.anim(f,t,env,sky);
+  f.drawImage(B.back,0,0);
+  if(sc.anim2) sc.anim2(f,t,env,sky);
+  const list=[];
+  for(const a of A){ if(a.hab!==k||hide.has(a.id)) continue; const st=S.status[a.id]; if(st==='away') continue;
+    const hd=huddle&&a.id==='emperor';
+    [[0,0]].concat(a.copies||[]).forEach((o,ci)=>{ const p=animalPos(a,st,env,t,ci,hd); const oo=hd?[o[0]*.4,o[1]*.5]:o; list.push({a,st,x:p.x+oo[0],y:p.y+oo[1],flip:p.flip,ci,still:p.still}); }); }
+  list.sort((p,q)=>p.y-q.y);
+  const drawn=[];
+  for(const it of list){ const key=spKey(it.a,env), def=SPR[key], sleep=it.st==='asleep';
+    if(sleep&&it.a.hide){ drawn.push({...it,box:{x:it.x-4,y:it.y-8,w:8,h:8},hidden:true}); continue; }
+    const fi=it.still?0:Math.floor(t*(it.a.move==='walk'?5*(it.a.spd>.3?1.6:1):4)+it.ci);
+    const fr=frame(key,sleep?'sleep':'awake',fi);
+    const ax=def.ax??def.w/2, ay=def.ay??def.h-2;
+    const ox=Math.round(it.x-ax), oy=Math.round(it.y-ay);
+    if(hab.kind==='land'&&it.a.move!=='fly'&&!def.top&&!(k==='rainforest'&&it.y<150)&&!(k==='london'&&it.y<140)&&it.a.id!=='eagleowl') drawShadow(f,it.x,it.y,(fr.bb[2]-fr.bb[0])*.8);
+    if(def.alpha) f.globalAlpha=def.alpha;
+    if(it.flip){ f.save(); f.translate(ox+def.w,oy); f.scale(-1,1); f.drawImage(fr.cv,0,0); f.restore(); } else f.drawImage(fr.cv,ox,oy);
+    f.globalAlpha=1;
+    const bx=it.flip?ox+def.w-1-fr.bb[2]:ox+fr.bb[0];
+    const box={x:bx,y:oy+fr.bb[1],w:fr.bb[2]-fr.bb[0]+1,h:fr.bb[3]-fr.bb[1]+1};
+    if(sleep&&it.a.cocoon){ f.globalAlpha=.4; f.strokeStyle='#dff8ff'; f.lineWidth=1; f.strokeRect(box.x-1.5,box.y-1.5,box.w+3,box.h+3); f.globalAlpha=1; }
+    drawn.push({...it,box,fr,ox,oy,def});
+  }
+  for(const ev of evs) if(ev.draw){ const p=(S.t%ev.cycle[0])/ev.cycle[1]; ev.draw(f,p,t,env); }
+  if(sc.front) sc.front(f,t,env,sky);
+  const dk=hab.kind==='deep'?.42:env.dark*(hab.kind==='water'?.72:.7);
+  f.globalCompositeOperation='source-atop';
+  if(dk>0){ f.fillStyle=`rgba(10,14,46,${dk})`; f.fillRect(0,0,W,H); }
+  if(hab.kind==='land'){ const gw=clamp(1-Math.abs(env.alt-2)/8,0,1); if(gw>0){ f.fillStyle=`rgba(255,130,60,${.16*gw})`; f.fillRect(0,0,W,H); } if(wx.kind!=='clear'&&wx.kind!=='cloudy'){ f.fillStyle='rgba(60,70,90,.18)'; f.fillRect(0,0,W,H); } }
+  f.globalCompositeOperation='source-over';
+  g.drawImage(fgc,0,0);
+  for(const d of drawn){ if(d.hidden) continue; const fr=d.fr, night=env.dark>.6&&d.st==='awake'&&hab.kind==='land';
+    if(d.def.uv&&env.dark>.6){ const s=silhouette(fr,'#5affd8'); g.globalAlpha=.55; if(d.flip){ g.save(); g.translate(d.ox+d.def.w,d.oy); g.scale(-1,1); g.drawImage(s,0,0); g.restore(); } else g.drawImage(s,d.ox,d.oy); g.globalAlpha=1; }
+    const pts=[...fr.glows.map(q=>[q[0],q[1],q[2],1]),...(night?fr.eyes.map(q=>[q[0],q[1],'#f6f3b0',.8]):[])];
+    for(const [ex,ey,col,s] of pts){ const px=d.flip?d.ox+d.def.w-1-ex:d.ox+ex, py=d.oy+ey; const pulse=.6+.4*Math.sin(t*3+ex);
+      g.globalAlpha=.22*pulse*s; R(g,px-1,py-1,3,3,col); g.globalAlpha=s; R(g,px,py,1,1,col); } g.globalAlpha=1; }
+  if(sc.post) sc.post(g,t,env);
+  for(const ev of evs) if(ev.post) ev.post(g,t,env);
+  drawWeather(g,wx,t,hab.kind,sc.hz||H);
+  for(const d of drawn){ if(d.st!=='asleep'||d.ci>0) continue; const bx=d.box.x+d.box.w-2, by=d.box.y-2;
+    for(let q=0;q<2;q++){ const ph=((t*.55+q*.5+d.a.id.length*.13)%1); const zx=Math.round(bx+ph*5+q*3), zy=Math.round(by-ph*10); const s=q?3:4;
+      g.globalAlpha=Math.sin(ph*Math.PI)*.95; R(g,zx,zy,s,1,'#eef2ff'); for(let i=1;i<s-1;i++) R(g,zx+s-1-i,zy+i,1,1,'#eef2ff'); R(g,zx,zy+s-1,s,1,'#eef2ff'); } g.globalAlpha=1; }
+  return {drawn,evs};
+}
+const hits=[];
+function render(){
+  if(S.study){ renderScene(S.hab,sctx); return; }
+  if(S.view==='world'){ renderWorld(); return; }
+  const k=S.hab; const {drawn,evs}=renderScene(k,gMain);
+  hits.length=0; for(const d of drawn) hits.push({id:d.a.id,box:d.box});
+  const tk=$('ticker'); const lab=evs[0]?evs[0].label:''; if(tk.textContent!==lab) tk.textContent=lab; tk.hidden=!lab;
+  const tag=$('tag');
+  if(S.sel && BY_ID[S.sel].hab===k){ const d=drawn.find(z=>z.a.id===S.sel&&z.ci===0);
+    if(d){ const b=d.box, on=Math.floor(S.t*3)%2===0, col='#ffd166';
+      if(on){ const x0=b.x-2,y0=b.y-2,x1=b.x+b.w+1,y1=b.y+b.h+1; for(const [cx,cy,sx,sy] of [[x0,y0,1,1],[x1,y0,-1,1],[x0,y1,1,-1],[x1,y1,-1,-1]]){R(gMain,Math.min(cx,cx+sx*3),cy,4,1,col);R(gMain,cx,Math.min(cy,cy+sy*3),1,4,col);} }
+      tag.hidden=false; tag.textContent=BY_ID[S.sel].name; tag.style.left=((b.x+b.w/2)/W*100)+'%'; tag.style.top=(Math.max(10,b.y-4)/H*100)+'%';
+    } else tag.hidden=true;
+  } else tag.hidden=true;
+}
+
+/* ================= World view ================= */
+const TILES={}; let wTurn=0;
+function buildWorld(){
+  $('wgrid').innerHTML=HAB_ORDER.map(k=>`<button type="button" class="tile" data-h="${k}" aria-label="Open ${HAB[k].name}"><canvas width="${W}" height="${H}"></canvas><div class="tl"><b>${HAB[k].name}</b><span data-wt="${k}"></span></div><div class="tc" data-wc="${k}"></div></button>`).join('');
+  document.querySelectorAll('.tile').forEach(b=>{ const x=b.querySelector('canvas').getContext('2d'); x.imageSmoothingEnabled=false; TILES[b.dataset.h]=x; });
+  $('wgrid').onclick=e=>{const b=e.target.closest('.tile'); if(b) setHab(b.dataset.h); };
+}
+function renderWorld(){ for(let i=0;i<2;i++){ const k=HAB_ORDER[wTurn%HAB_ORDER.length]; wTurn++; if(TILES[k]) renderScene(k,TILES[k]); } }
+function worldText(){
+  let aw=0,as=0,away=0; for(const a of A){ const s=S.status[a.id]; if(s==='awake'||s==='migrate') aw++; else if(s==='asleep') as++; else away++; }
+  $('worldHead').textContent=`Right now across ${HAB_ORDER.length} places: ${aw} animals awake, ${as} asleep${away?`, ${away} away for the season`:''}.`;
+  for(const k of HAB_ORDER){ const e=S.envs[k]; const el=document.querySelector(`[data-wt="${k}"]`); if(el) el.textContent=`${e.lp.str} · ${e.phase}`;
+    const c=document.querySelector(`[data-wc="${k}"]`); if(c){ const L=A.filter(a=>a.hab===k); const n=L.filter(a=>['awake','migrate'].includes(S.status[a.id])).length; c.textContent=`${n} awake · ${L.filter(a=>S.status[a.id]==='asleep').length} asleep`; } }
+}
+
+/* ================= UI ================= */
+function $(id){return document.getElementById(id)}
+function buildTabs(){
+  $('tabs').innerHTML=`<button type="button" data-h="world" aria-pressed="false">World</button>`+HAB_ORDER.map(k=>`<button type="button" data-h="${k}" aria-pressed="false">${HAB[k].name}<span class="clock" data-c="${k}"></span></button>`).join('');
+  $('tabs').onclick=e=>{const b=e.target.closest('button');if(!b) return; if(b.dataset.h==='world') setView('world'); else setHab(b.dataset.h); };
+}
+function setView(v){ S.view=v; $('world').hidden=v!=='world'; $('habView').hidden=v==='world'; $('panel').hidden=v==='world';
+  document.querySelectorAll('#tabs button').forEach(b=>b.setAttribute('aria-pressed',v==='world'?b.dataset.h==='world':b.dataset.h===S.hab));
+  if(v==='world'){ worldText(); for(let i=0;i<HAB_ORDER.length/2;i++) renderWorld(); } }
+function setHab(k,keepSel){
+  S.hab=k; if(!keepSel) S.sel=null; try{localStorage.setItem('lh_hab',k)}catch(e){}
+  setView('hab');
+  const dp=$('depth'); if(k==='deep'){ dp.hidden=false; dp.innerHTML=[0,200,400,600,800,1000].map(m=>`<span style="top:${Math.min(97,Math.max(3,m/1000*100))}%">${m.toLocaleString('en-GB')} m</span>`).join(''); } else dp.hidden=true;
+  tick(true);
+}
+let lastPanelKey='';
+function renderPanel(force){
+  const hab=HAB[S.hab], env=S.env;
+  const groups={awake:[],asleep:[],away:[]};
+  for(const a of A){ if(a.hab!==S.hab) continue; const st=S.status[a.id]; (st==='migrate'?groups.awake:groups[st]).push(a); }
+  const key=S.hab+'|'+S.sel+'|'+A.filter(a=>a.hab===S.hab).map(a=>S.status[a.id]+spKey(a,env)).join(',')+'|'+(env.dark>.5);
+  if(!force && key===lastPanelKey) return; lastPanelKey=key;
+  const chip=(a,cls)=>`<button type="button" class="chip ${cls}" data-id="${a.id}" aria-current="${S.sel===a.id}"><img alt="" src="${cls==='asleep'?ICON_S[a.id]:ICON[a.id]}">${a.name}${cls==='away'?` <small>back ${a.back}</small>`:''}${cls==='asleep'&&isHib(a,env)?' <small>hibernating</small>':''}</button>`;
+  $('lAwake').innerHTML=groups.awake.map(a=>chip(a,'awake')).join('')||'<p class="empty-note">Everyone here is asleep right now.</p>';
+  $('lAsleep').innerHTML=groups.asleep.map(a=>chip(a,'asleep')).join('')||'<p class="empty-note">Nobody is asleep right now.</p>';
+  $('lAway').innerHTML=groups.away.map(a=>chip(a,'away')).join(''); $('gAway').hidden=!groups.away.length;
+  $('nAwake').textContent=groups.awake.length; $('nAsleep').textContent=groups.asleep.length; $('nAway').textContent=groups.away.length;
+  const card=$('card');
+  if(S.sel){ const a=BY_ID[S.sel], st=S.status[a.id]; const pc=st==='migrate'?'migrate':st; const pl={awake:'Awake',asleep:isHib(a,env)?'Hibernating':'Asleep',away:'Away',migrate:env.dark>.5?'Rising':'Sinking'}[st];
+    card.innerHTML=`<div class="head"><img alt="" src="${st==='asleep'?ICON_S[a.id]:ICON[a.id]}"><div><h2>${a.name}</h2><div class="sci">${a.sci}</div></div><button class="close" id="clr" type="button" aria-label="Close and show habitat">×</button></div>
+      <span class="pill ${pc}">${pl}</span><p>${statusLine(a,st,env)}.</p><div class="meta">${a.rl||RL[a.r]} · ${HAB[a.hab].place.split(' · ')[0]}</div><p class="fact">${a.fact}</p>`;
+    $('clr').onclick=()=>{S.sel=null;renderPanel(true)};
+  } else {
+    card.innerHTML=`<h2>${hab.name}</h2><div class="meta">${hab.place}</div><p>${hab.desc}</p><p class="fact">${groups.awake.length} awake, ${groups.asleep.length} asleep${groups.away.length?`, ${groups.away.length} away for the season`:''}. Tap an animal in the scene or below.</p>`;
+  }
+}
+document.querySelector('.panel').addEventListener('click',e=>{const c=e.target.closest('.chip');if(c){S.sel=c.dataset.id;renderPanel(true)}});
+function toCanvas(e){const r=cv.getBoundingClientRect();return [(e.clientX-r.left)/r.width*W,(e.clientY-r.top)/r.height*H]}
+function pick(px,py){let best=null,bd=1e9;for(const h of hits){const b=h.box;const pad=3;if(px>=b.x-pad&&px<=b.x+b.w+pad&&py>=b.y-pad&&py<=b.y+b.h+pad){const d=Math.hypot(px-(b.x+b.w/2),py-(b.y+b.h/2));if(d<bd){bd=d;best=h.id}}}return best}
+cv.addEventListener('click',e=>{const [x,y]=toCanvas(e);S.sel=pick(x,y);renderPanel(true)});
+cv.addEventListener('mousemove',e=>{const [x,y]=toCanvas(e);cv.style.cursor=pick(x,y)?'pointer':'default'});
+const q=$('q'), res=$('results'); let items=[], act=-1;
+function doSearch(){
+  const s=q.value.trim().toLowerCase(); if(!s){res.hidden=true;q.setAttribute('aria-expanded','false');return}
+  items=[];
+  for(const k of HAB_ORDER){const h=HAB[k];if((h.name+' '+h.place+' '+h.alias).toLowerCase().includes(s)) items.push({type:'hab',k});}
+  for(const a of A){if((a.name+' '+a.sci+' '+(a.alias||'')).toLowerCase().includes(s)) items.push({type:'animal',id:a.id});}
+  items=items.slice(0,10); act=items.length?0:-1;
+  res.innerHTML=items.length?items.map((it,i)=>{ if(it.type==='hab'){const h=HAB[it.k];const e=S.envs[it.k];return `<li role="option" id="o${i}" data-i="${i}" aria-selected="${i===act}"><img alt="" src="${ICON[A.find(a=>a.hab===it.k).id]}"><span>${h.name}</span><small>${h.place.split(' · ')[0]}<br>${e.lp.str} · ${e.phase}</small></li>`}
+      const a=BY_ID[it.id];const e=S.envs[a.hab];const st=S.status[a.id];const lbl={awake:'Awake',asleep:isHib(a,e)?'Hibernating':'Asleep',away:'Away',migrate:'Migrating'}[st];return `<li role="option" id="o${i}" data-i="${i}" aria-selected="${i===act}"><img alt="" src="${ICON[a.id]}"><span>${a.name}</span><small>${HAB[a.hab].name}<br>${lbl} · ${e.lp.str}</small></li>`}).join('')
+    :`<li class="empty">Not in these habitats yet. Try fox, penguin, squid or Sahara.</li>`;
+  res.hidden=false; q.setAttribute('aria-expanded','true'); q.setAttribute('aria-activedescendant',act>=0?'o'+act:'');
+}
+function choose(i){const it=items[i];if(!it)return; if(it.type==='hab'){setHab(it.k)}else{const a=BY_ID[it.id];S.sel=a.id;setHab(a.hab,true)} q.value='';res.hidden=true;q.setAttribute('aria-expanded','false');}
+q.addEventListener('input',doSearch);
+q.addEventListener('keydown',e=>{ if(res.hidden) return; if(e.key==='ArrowDown'||e.key==='ArrowUp'){e.preventDefault();if(!items.length)return;act=(act+(e.key==='ArrowDown'?1:-1)+items.length)%items.length;res.querySelectorAll('li').forEach((li,i)=>li.setAttribute('aria-selected',i===act));q.setAttribute('aria-activedescendant','o'+act)} else if(e.key==='Enter'){e.preventDefault();choose(act)} else if(e.key==='Escape'){res.hidden=true;q.setAttribute('aria-expanded','false')} });
+res.addEventListener('mousedown',e=>{const li=e.target.closest('li[data-i]');if(li){e.preventDefault();choose(+li.dataset.i)}});
+q.addEventListener('blur',()=>setTimeout(()=>{res.hidden=true;q.setAttribute('aria-expanded','false')},120));
+
+const tOff=$('tOff'), tOut=$('tOut'), lapseBtn=$('lapse'), dOff=$('dOff'), dOut=$('dOut'), yBtn=$('ylapse');
+function fmtOff(m){ if(Math.abs(m)<1) return 'Live'; const s=m<0?'−':'+'; m=Math.abs(Math.round(m)); const h=Math.floor(m/60), mm=m%60; return s+h+' h'+(mm?' '+mm+' min':''); }
+function fmtDate(){ const e=S.envs[S.hab]; if(!e) return ''; return Math.round(S.dayOff)===0?'Today':`${e.lp.day} ${MONTHS[e.lp.month-1]}`; }
+tOff.addEventListener('input',()=>{S.offset=+tOff.value; tOut.textContent=fmtOff(S.offset); tick(true)});
+dOff.addEventListener('input',()=>{S.dayOff=+dOff.value; tick(true)});
+$('live').onclick=()=>{S.offset=0;S.lapse=false;lapseBtn.setAttribute('aria-pressed','false');tOff.value=0;tOut.textContent='Live';tick(true)};
+$('today').onclick=()=>{S.dayOff=0;S.ylapse=false;yBtn.setAttribute('aria-pressed','false');dOff.value=0;tick(true)};
+lapseBtn.onclick=()=>{S.lapse=!S.lapse;lapseBtn.setAttribute('aria-pressed',S.lapse)};
+yBtn.onclick=()=>{S.ylapse=!S.ylapse;yBtn.setAttribute('aria-pressed',S.ylapse)};
+$('wx').onchange=e=>{S.wxMode=e.target.value; tick(true)};
+
+function tick(force){
+  const ms=nowMs(); for(const k of HAB_ORDER) S.envs[k]=envFor(k,ms); S.env=S.envs[S.hab];
+  for(const a of A) S.status[a.id]=status(a,S.envs[a.hab]);
+  for(const k of HAB_ORDER) S.wx[k]=wxFor(k);
+  const env=S.env, hab=HAB[S.hab], wx=S.wx[S.hab];
+  $('hudPlace').textContent=hab.place;
+  $('hudTime').textContent=env.lp.wd+' '+env.lp.str;
+  const sun=(env.alt>=0?'+':'−')+Math.abs(env.alt).toFixed(0)+'°';
+  const wxs=wx.temp!=null?` · ${Math.round(wx.temp)}°C, ${WXL[wx.kind].toLowerCase()}`:(wx.manual&&wx.kind!=='clear'?` · ${WXL[wx.kind].toLowerCase()}`:'');
+  $('hudPhase').textContent=`${env.lp.day} ${MONTHS[env.lp.month-1]} · ${env.phase} · sun ${sun}`+(env.alt<0&&hab.kind!=='deep'?' · '+moonName(env.moon):'')+(hab.kind==='land'?wxs:'');
+  for(const k of HAB_ORDER){const el=document.querySelector(`[data-c="${k}"]`);if(el)el.textContent=S.envs[k].lp.str;}
+  dOut.textContent=fmtDate();
+  $('wxNote').textContent=S.wxMode!=='auto'?'Set by hand':S.wxLive===null?'Checking live weather…':S.wxLive===false?'Live weather isn’t available here':(Math.abs(S.offset)>180||Math.round(S.dayOff)!==0)?'Live weather pauses while time is shifted':'Live from Open-Meteo';
+  if(S.view==='world') worldText();
+  if(S.study) studyText();
+  renderPanel(force);
+}
+
+/* ================= Study mode ================= */
+const scv=$('scv'), sctx=scv.getContext('2d'); sctx.imageSmoothingEnabled=false;
+function studyText(){ $('sPlace').textContent=HAB[S.hab].name+' · '+HAB[S.hab].place.split(' · ')[0]; $('sTime').textContent=S.env.lp.str; }
+function fmtClock(s){ s=Math.max(0,Math.ceil(s)); return String(Math.floor(s/60)).padStart(2,'0')+':'+String(s%60).padStart(2,'0'); }
+function studyUI(){ const st=S.study; $('sMode').textContent=st.mode==='focus'?'Focus':'Break'; $('sClock').textContent=fmtClock(st.left); $('sPause').textContent=st.running?'Pause':'Resume'; }
+function chime(){ if(!AU.ctx) return; const t=AU.ctx.currentTime+.05; [72,79,84].forEach((m,i)=>osc('sine',mtof(m),t+i*.18,1.6,.08,.005)); }
+function openStudy(){ S.study={mode:'focus',left:25*60,running:true}; $('study').hidden=false; studyText(); studyUI(); if(!AU.on) $('snd').click();
+  try{ const el=$('study'); const p=el.requestFullscreen&&el.requestFullscreen(); if(p&&p.catch) p.catch(()=>{}); }catch(e){} idle(); $('sPause').focus(); }
+function closeStudy(){ S.study=null; $('study').hidden=true; try{ if(document.fullscreenElement) document.exitFullscreen().catch(()=>{}); }catch(e){} $('studyBtn').focus(); }
+let idleT=null; function idle(){ $('study').classList.remove('idle'); clearTimeout(idleT); idleT=setTimeout(()=>$('study').classList.add('idle'),3000); }
+$('study').addEventListener('pointermove',idle); $('study').addEventListener('pointerdown',idle);
+$('studyBtn').onclick=openStudy; $('sExit').onclick=closeStudy;
+$('sPause').onclick=()=>{S.study.running=!S.study.running; studyUI();};
+$('sSkip').onclick=()=>{ const st=S.study; st.mode=st.mode==='focus'?'break':'focus'; st.left=(st.mode==='focus'?25:5)*60; chime(); studyUI(); };
+const cycleHab=d=>{ const i=HAB_ORDER.indexOf(S.hab); S.hab=HAB_ORDER[(i+d+HAB_ORDER.length)%HAB_ORDER.length]; tick(true); };
+$('sPrev').onclick=()=>cycleHab(-1); $('sNext').onclick=()=>cycleHab(1);
+document.addEventListener('keydown',e=>{ if(!S.study) return; idle(); if(e.key==='Escape') closeStudy(); if(e.key==='ArrowRight') cycleHab(1); if(e.key==='ArrowLeft') cycleHab(-1); });
+
+/* ================= Postcard ================= */
+let pcBlobURL=null;
+function makePostcard(){
+  const scale=4, c=document.createElement('canvas'); c.width=W*scale; c.height=H*scale+96; const x=c.getContext('2d'); x.imageSmoothingEnabled=false;
+  const tmp=document.createElement('canvas'); tmp.width=W; tmp.height=H; const tx=tmp.getContext('2d'); tx.imageSmoothingEnabled=false; renderScene(S.hab,tx);
+  x.drawImage(tmp,0,0,W*scale,H*scale);
+  x.fillStyle='#14121c'; x.fillRect(0,H*scale,c.width,96); x.fillStyle='#ffd166'; x.fillRect(0,H*scale,c.width,4);
+  const e=S.env, hab=HAB[S.hab]; const L=A.filter(a=>a.hab===S.hab); const aw=L.filter(a=>['awake','migrate'].includes(S.status[a.id])).length, as=L.filter(a=>S.status[a.id]==='asleep').length;
+  x.textBaseline='top'; x.fillStyle='#f2f2f7'; x.font='600 34px "Pixelify Sans", "Courier New", monospace'; x.fillText(`${e.lp.str} in ${hab.place.split(' · ')[0]}`,28,H*scale+16);
+  x.fillStyle='#b8bed8'; x.font='22px "IBM Plex Mono", Menlo, monospace'; x.fillText(`${e.lp.day} ${MONTHS[e.lp.month-1]} · ${e.phase} · ${aw} awake · ${as} asleep`,28,H*scale+58);
+  x.textAlign='right'; x.fillStyle='#ffd166'; x.font='600 28px "Pixelify Sans", "Courier New", monospace'; x.fillText('Lofi Habitats',c.width-28,H*scale+18);
+  const url=/^https?:$/.test(location.protocol)&&!/claude\.ai|claudeusercontent/.test(location.host)?location.host+location.pathname.replace(/index\.html$/,''):'';
+  if(url){ x.fillStyle='#b8bed8'; x.font='20px "IBM Plex Mono", Menlo, monospace'; x.fillText(url,c.width-28,H*scale+60); }
+  $('pcImg').src=c.toDataURL('image/png');
+  c.toBlob(b=>{ if(pcBlobURL) URL.revokeObjectURL(pcBlobURL); pcBlobURL=b?URL.createObjectURL(b):null; },'image/png');
+  $('pc').hidden=false; $('pcClose').focus();
+}
+$('cardBtn').onclick=makePostcard; $('pcClose').onclick=()=>{$('pc').hidden=true; $('cardBtn').focus();}; $('pc').addEventListener('click',e=>{ if(e.target.id==='pc') $('pc').hidden=true; });
+document.addEventListener('keydown',e=>{ if(e.key==='Escape'&&!$('pc').hidden) $('pc').hidden=true; });
+let DL=null; if(window.claude&&window.claude.use) window.claude.use('downloads').then(d=>{DL=d}).catch(()=>{});
+$('pcDl').onclick=async()=>{ const name=`lofi-habitats-${S.hab}-${S.env.lp.str.replace(':','')}.png`;
+  if(DL){ try{ const b64=$('pcImg').src.split(',')[1], bin=atob(b64), u8=new Uint8Array(bin.length); for(let i=0;i<bin.length;i++) u8[i]=bin.charCodeAt(i); const blob=new Blob([u8],{type:'image/png'}); await DL.save({filename:name,data:blob}); }catch(e){} return; }
+  const a=document.createElement('a'); a.href=pcBlobURL||$('pcImg').src; a.download=name; document.body.appendChild(a); a.click(); a.remove(); };
+
+/* ================= Loop ================= */
+const reduce=matchMedia('(prefers-reduced-motion: reduce)').matches;
+let last=performance.now(), acc=0, slow=0;
+function loop(now){
+  const dt=Math.min(.1,(now-last)/1000); last=now;
+  S.t+=dt*(reduce?.35:1);
+  if(S.lapse){ S.offset+=dt*30; if(S.offset>=720) S.offset-=1440; tOff.value=Math.round(S.offset/15)*15; tOut.textContent=fmtOff(S.offset); }
+  if(S.ylapse){ S.dayOff=(S.dayOff+dt*6)%365; dOff.value=Math.round(S.dayOff); }
+  if(S.study&&S.study.running){ S.study.left-=dt; if(S.study.left<=0){ const st=S.study; st.mode=st.mode==='focus'?'break':'focus'; st.left=(st.mode==='focus'?25:5)*60; chime(); } if(Math.floor(S.study.left)!==S.study._s){ S.study._s=Math.floor(S.study.left); studyUI(); } }
+  slow+=dt; if(slow>((S.lapse||S.ylapse)?.25:2)){slow=0;tick(false);}
+  acc+=dt; if(acc>=1/15){acc=0;render();}
+  requestAnimationFrame(loop);
+}
+
+/* ================= Audio ================= */
+const AU={ctx:null,on:false,step:0,next:0,timer:null,rec:{}};
+const PROG=[[53,57,60,64],[52,55,59,62],[50,53,57,60],[48,52,55,59]];
+const mtof=m=>440*Math.pow(2,(m-69)/12);
+function auInit(){
+  const Cx=window.AudioContext||window.webkitAudioContext; if(!Cx) return false;
+  const c=AU.ctx=new Cx(); AU.master=c.createGain(); AU.master.gain.value=0; AU.lp=c.createBiquadFilter(); AU.lp.type='lowpass'; AU.lp.frequency.value=2200;
+  AU.master.connect(AU.lp); AU.lp.connect(c.destination);
+  const nb=c.createBuffer(1,c.sampleRate*2,c.sampleRate), d=nb.getChannelData(0); for(let i=0;i<d.length;i++) d[i]=(Math.random()*2-1);
+  AU.noise=nb;
+  const cb=c.createBuffer(1,c.sampleRate*3,c.sampleRate), cd=cb.getChannelData(0); for(let i=0;i<cd.length;i++) cd[i]=(Math.random()*2-1)*.012+(Math.random()<.0006?(Math.random()*2-1)*.5:0);
+  const cs=c.createBufferSource(); cs.buffer=cb; cs.loop=true; const cg=c.createGain(); cg.gain.value=.35; cs.connect(cg); cg.connect(AU.master); cs.start();
+  return true;
+}
+/* Optional real recordings: add files at sounds/<animal-id>.mp3 next to index.html (see README). Missing files fall back to the synthesised calls. */
+function recording(id){ if(AU.rec[id]!==undefined) return AU.rec[id]; AU.rec[id]=null; if(!/^https?:$/.test(location.protocol)) { AU.rec[id]=false; return null; }
+  fetch('sounds/'+id+'.mp3').then(r=>r.ok?r.arrayBuffer():Promise.reject()).then(b=>AU.ctx.decodeAudioData(b)).then(buf=>{AU.rec[id]=buf}).catch(()=>{AU.rec[id]=false}); return null; }
+function playRec(buf,t){ const s=AU.ctx.createBufferSource(), gn=AU.ctx.createGain(); s.buffer=buf; gn.gain.setValueAtTime(.5,t); gn.gain.setTargetAtTime(0,t+Math.min(buf.duration,4),.3); s.connect(gn); gn.connect(AU.master); s.start(t); s.stop(t+Math.min(buf.duration,5)); }
+function aenv(gn,t,a,peak,dec){gn.gain.setValueAtTime(0.0001,t);gn.gain.exponentialRampToValueAtTime(peak,t+a);gn.gain.exponentialRampToValueAtTime(0.0001,t+a+dec);}
+function osc(type,freq,t,dur,peak,att,to,dest){const c=AU.ctx,o=c.createOscillator(),gn=c.createGain();o.type=type;o.frequency.setValueAtTime(freq,t);if(to)o.frequency.exponentialRampToValueAtTime(to,t+dur*.8);aenv(gn,t,att||.01,peak,dur);o.connect(gn);gn.connect(dest||AU.master);o.start(t);o.stop(t+dur+(att||.01)+.05);return o}
+function noise(t,dur,peak,ftype,freq){const c=AU.ctx,s=c.createBufferSource(),fl=c.createBiquadFilter(),gn=c.createGain();s.buffer=AU.noise;fl.type=ftype;fl.frequency.value=freq;aenv(gn,t,.005,peak,dur);s.connect(fl);fl.connect(gn);gn.connect(AU.master);s.start(t,Math.random());s.stop(t+dur+.05)}
+const VOICE={
+  chirp:t=>{osc('sine',2600,t,.07,.05,.005,3600);osc('sine',2800,t+.1,.06,.04,.005,3800)},
+  squawk:t=>{const c=AU.ctx,fl=c.createBiquadFilter();fl.type='bandpass';fl.frequency.value=1400;fl.connect(AU.master);osc('sawtooth',900,t,.18,.05,.01,650,fl)},
+  croak:t=>{for(let i=0;i<3;i++)osc('square',130,t+i*.07,.05,.025,.005)},
+  trill:t=>{for(let i=0;i<6;i++)osc('triangle',3200,t+i*.035,.025,.03,.002)},
+  low:t=>osc('sine',72,t,1.6,.16,.3,52),
+  grunt:t=>osc('triangle',95,t,.25,.08,.02,70),
+  howl:t=>{const c=AU.ctx,fl=c.createBiquadFilter();fl.type='lowpass';fl.frequency.value=700;fl.connect(AU.master);const o=osc('sawtooth',170,t,1.3,.06,.2,null,fl);o.frequency.linearRampToValueAtTime(320,t+.6);o.frequency.linearRampToValueAtTime(210,t+1.3)},
+  roar:t=>{noise(t,1.1,.18,'lowpass',260);osc('sawtooth',70,t,1,.04,.1,48)},
+  bark:t=>{osc('square',620,t,.05,.03,.003,480);osc('square',620,t+.12,.05,.025,.003,480)},
+  whoop:t=>osc('sine',380,t,.7,.06,.05,950),
+  hoot:t=>{osc('sine',330,t,.3,.07,.05);osc('sine',300,t+.4,.35,.06,.05)},
+  bubble:t=>{osc('sine',320,t,.08,.06,.005,1100);osc('sine',420,t+.09,.07,.04,.005,1300)},
+  click:t=>{for(let i=0;i<3;i++)noise(t+i*.05,.02,.08,'highpass',3000)},
+  ping:t=>{const notes=[72,74,77,79,81,84];osc('sine',mtof(notes[Math.floor(Math.random()*notes.length)]),t,1.4,.05,.005)},
+  scream:t=>{const c=AU.ctx,fl=c.createBiquadFilter();fl.type='bandpass';fl.frequency.value=1500;fl.connect(AU.master);osc('sawtooth',1100,t,.45,.04,.02,700,fl)},
+  snuffle:t=>{for(let i=0;i<4;i++)noise(t+i*.09,.05,.06,'bandpass',900)},
+  coo:t=>{osc('sine',420,t,.25,.07,.04,380);osc('sine',400,t+.35,.45,.06,.05,360)},
+  robin:t=>{[88,91,86,93,89,95].forEach((m,i)=>osc('sine',mtof(m),t+i*.07,.06,.035,.004))},
+  owl:t=>{osc('sine',740,t,.18,.05,.01,620);osc('sine',420,t+.5,.5,.06,.05,400);osc('sine',420,t+1.1,.6,.05,.05,380)},
+  trumpet:t=>{const c=AU.ctx,fl=c.createBiquadFilter();fl.type='lowpass';fl.frequency.value=1200;fl.connect(AU.master);osc('sawtooth',300,t,.5,.04,.03,340,fl);osc('sawtooth',310,t+.55,.5,.035,.03,280,fl)},
+  trillsweep:t=>osc('sine',3200,t,2.2,.05,.05,500),
+  whistle:t=>{osc('sine',1800,t,.6,.04,.05,2600);osc('sine',2600,t+.6,.4,.03,.02,1900)},
+  rasp:t=>noise(t,.5,.07,'highpass',2500),
+};
+function voiceFor(a,t){ const rec=recording(a.id); if(rec) playRec(rec,t); else (VOICE[a.voice]||VOICE.ping)(t); }
+function auStep(s,t){
+  const tr=HAB[S.hab].transpose, dark=S.env?S.env.dark:0, deep=S.hab==='deep';
+  const bar=Math.floor(s/8), pos=s%8, beat=60/72;
+  if(pos===0){ AU.lp.frequency.setTargetAtTime(deep?900:2600-1500*dark,t,.5);
+    const ch=PROG[bar%4]; for(const m of ch){ const fq=mtof(m+tr); osc('triangle',fq,t,beat*4,.035,.08); osc('sine',fq*1.003,t,beat*4,.03,.08);} osc('sine',mtof(ch[0]+tr-12),t,beat*3,.12,.02); }
+  if(!deep&&!(S.study&&S.study.mode==='focus')){
+    if(pos===0||(pos===5&&dark<.6)) osc('sine',120,t,.28,.45,.002,42);
+    if((pos===2||pos===6)&&dark<.8) noise(t,.14,.1,'bandpass',1800);
+    if(dark<.5||pos%2===0) noise(t,.03,.03,'highpass',7000);
+  }
+  if(Math.random()<.18){const sc=[60,62,65,67,69,72,74];osc('sine',mtof(sc[Math.floor(Math.random()*sc.length)]+tr+12),t,1.2,.04,.01)}
+  if((pos===3||pos===7)&&Math.random()<.55){ const aw=A.filter(a=>a.hab===S.hab&&(S.status[a.id]==='awake'||S.status[a.id]==='migrate')); if(aw.length) voiceFor(aw[Math.floor(Math.random()*aw.length)],t+.05); }
+  if(pos===1&&S.env){ for(const ev of activeEvents(S.hab,S.env)) if(ev.voice&&Math.random()<.5) VOICE[ev.voice](t+.1); }
+}
+function auTick(){ const c=AU.ctx, ed=60/72/2; while(AU.next<c.currentTime+.25){ const sw=AU.step%2===0?ed*1.12:ed*.88; auStep(AU.step,AU.next); AU.next+=sw; AU.step++; } }
+$('snd').onclick=()=>{
+  if(!AU.ctx && !auInit()){ $('sndLabel').textContent='No audio here'; return; }
+  const c=AU.ctx; AU.on=!AU.on; const b=$('snd');
+  if(AU.on){ c.resume(); AU.master.gain.cancelScheduledValues(c.currentTime); AU.master.gain.setTargetAtTime(.55,c.currentTime,.4); AU.next=c.currentTime+.1; AU.timer=setInterval(auTick,40); b.classList.add('on'); $('sndLabel').textContent='Pause lofi'; }
+  else { AU.master.gain.setTargetAtTime(0,c.currentTime,.2); clearInterval(AU.timer); b.classList.remove('on'); $('sndLabel').textContent='Play lofi'; }
+  b.setAttribute('aria-pressed',AU.on);
+};
+
+/* ================= Boot ================= */
+icons(); buildTabs(); buildWorld(); tick(true); if(S.view==='world') setView('world'); else setHab(S.hab,false); render(); requestAnimationFrame(loop); fetchWeather(); setInterval(fetchWeather,15*60*1000);
+})();
+</script>
+</body></html>
